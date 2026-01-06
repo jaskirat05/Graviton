@@ -23,20 +23,24 @@ Base = declarative_base()
 
 
 class Chain(Base):
-    """Represents a chain execution (e.g., 'image-edit-to-video-pipeline')"""
+    """Represents a chain execution with versioning support"""
 
     __tablename__ = "chains"
 
     id = Column(String, primary_key=True)  # UUID
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, index=True)  # Chain name (e.g., 'image-edit-pipeline')
     description = Column(Text)
+    version = Column(Integer, nullable=False, default=1)  # Incremental version number
+
+    # Regeneration tracking
+    regenerated_from_step_id = Column(String)  # Which step triggered this version (NULL for initial v1)
 
     # Temporal workflow info
     temporal_workflow_id = Column(String, unique=True)
     temporal_run_id = Column(String)
 
     # Status
-    status = Column(String, nullable=False)  # 'initializing', 'executing_level_N', 'completed', 'failed', 'cancelled'
+    status = Column(String, nullable=False)  # 'initializing', 'executing_level_N', 'completed', 'failed', 'cancelled', 'partial'
     current_level = Column(Integer, default=0)
 
     # Timestamps
@@ -54,10 +58,11 @@ class Chain(Base):
     # Relationships
     workflows = relationship("Workflow", back_populates="chain", cascade="all, delete-orphan")
 
-    # Indexes
+    # Constraints and Indexes
     __table_args__ = (
+        UniqueConstraint('name', 'version', name='_chain_name_version_uc'),
         Index("idx_chains_temporal", "temporal_workflow_id"),
-        Index("idx_chains_status", "status"),
+        Index("idx_chains_name_status_version", "name", "status", "version"),
         Index("idx_chains_started", "started_at"),
     )
 
@@ -226,7 +231,8 @@ class ApprovalRequest(Base):
     step_id = Column(String)  # Which step in the chain this approval is for
 
     # Temporal workflow info (parent workflow waiting for approval)
-    temporal_workflow_id = Column(String, unique=True, nullable=False)  # Workflow to signal when decision made
+    # Multiple steps in same workflow can have separate approval requests
+    temporal_workflow_id = Column(String, nullable=False)  # Workflow to signal when decision made
     temporal_run_id = Column(String)
 
     # Links

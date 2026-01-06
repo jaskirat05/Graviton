@@ -23,6 +23,11 @@ from .database_operations import (
     get_workflow_artifacts,
 )
 from .approval_operations import create_approval_request_activity
+from .cache_operations import (
+    build_cache_from_database,
+    get_next_chain_version,
+    get_chain_by_name_version,
+)
 
 __all__ = [
     "select_best_server",
@@ -42,4 +47,7 @@ __all__ = [
     "update_workflow_status_activity",
     "get_workflow_artifacts",
     "create_approval_request_activity",
+    "build_cache_from_database",
+    "get_next_chain_version",
+    "get_chain_by_name_version",
 ]

@@ -282,6 +282,7 @@ class ApprovalService:
             if self.temporal_client:
                 await self._send_approval_signal(
                     updated_request.temporal_workflow_id,
+                    updated_request.step_id,  # Pass step_id
                     decision="approved",
                     decided_by=decided_by,
                     parameters={},
@@ -352,6 +353,7 @@ class ApprovalService:
             if self.temporal_client:
                 await self._send_approval_signal(
                     updated_request.temporal_workflow_id,
+                    updated_request.step_id,  # Pass step_id
                     decision="rejected",
                     decided_by=decided_by,
                     parameters=parameters,
@@ -371,6 +373,7 @@ class ApprovalService:
     async def _send_approval_signal(
         self,
         workflow_id: str,
+        step_id: str,
         decision: str,
         decided_by: str,
         parameters: Dict[str, Any],
@@ -380,16 +383,19 @@ class ApprovalService:
         try:
             handle = self.temporal_client.get_workflow_handle(workflow_id)
 
-            await handle.signal(
-                "approval_decision_signal",
-                decision,
-                decided_by,
-                parameters,
-                comment
-            )
+            # Pack all data into a single dict
+            signal_data = {
+                "step_id": step_id,
+                "decision": decision,
+                "decided_by": decided_by,
+                "parameters": parameters,
+                "comment": comment
+            }
+
+            await handle.signal("approval_decision_signal", signal_data)
 
             logger.info(
-                f"Sent approval signal to workflow {workflow_id}: "
+                f"Sent approval signal to workflow {workflow_id} for step {step_id}: "
                 f"decision={decision}, decided_by={decided_by}"
             )
         except Exception as e:

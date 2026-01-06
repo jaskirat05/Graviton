@@ -4,34 +4,35 @@ Chain System
 Provides tools for defining, validating, and executing workflow chains.
 
 Usage:
-    from temporal_gateway.chains import load_chain, create_execution_plan, ChainEngine
+    from temporal_gateway.chains import load_chain, create_execution_graph, ChainEngine
     from temporal_gateway.workflows import ChainExecutorWorkflow
     from temporalio.client import Client
 
     # Load chain definition
     chain = load_chain("chains/video_pipeline.yaml")
 
-    # Create execution plan
-    plan = create_execution_plan(chain)
+    # Create execution graph
+    graph = create_execution_graph(chain)
 
     # Inspect parallel groups
-    groups = plan.get_parallel_groups()
+    groups = graph.get_level_groups()
     print(f"Parallel execution groups: {groups}")
 
     # Execute via Chain Engine
     temporal_client = await Client.connect("localhost:7233")
     engine = ChainEngine(temporal_client)
-    workflow_id = await engine.execute_chain(plan)
+    workflow_id = await engine.execute_chain(graph)
     print(f"Chain started: {workflow_id}")
 """
 
+# Import all models from models/ package
 from .models import (
     ChainDefinition,
     ChainStepDefinition,
-    ExecutionPlan,
-    ExecutionNode,
     StepResult,
-    ChainExecutionResult
+    ChainExecutionResult,
+    ExecutionGraph,
+    StepNode,
 )
 
 from .interpreter import (
@@ -43,9 +44,8 @@ from .interpreter import (
 from .service import (
     load_chain,
     load_chain_from_dict,
-    create_execution_plan,
+    create_execution_graph,
     validate_chain,
-    get_execution_summary,
     discover_chains,
     resolve_step_parameters,
     evaluate_step_condition
@@ -57,10 +57,10 @@ __all__ = [
     # Models
     "ChainDefinition",
     "ChainStepDefinition",
-    "ExecutionPlan",
-    "ExecutionNode",
     "StepResult",
     "ChainExecutionResult",
+    "ExecutionGraph",
+    "StepNode",
 
     # Interpreter
     "ChainInterpreter",
@@ -70,9 +70,8 @@ __all__ = [
     # Service functions
     "load_chain",
     "load_chain_from_dict",
-    "create_execution_plan",
+    "create_execution_graph",
     "validate_chain",
-    "get_execution_summary",
     "discover_chains",
     "resolve_step_parameters",
     "evaluate_step_condition",

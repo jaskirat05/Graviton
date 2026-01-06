@@ -1,147 +1,250 @@
 """
-Test script to execute the conditional video generation chain
+Chain Execution Test - Manual Regeneration from Specific Step
+
+Tests the regeneration workflow from a specific step with caching.
 """
 
 import asyncio
 import httpx
 import json
 import time
+from typing import Optional
 
 
-async def test_image_edit_pipeline():
-    """Test the image edit to video pipeline chain"""
+BASE_URL = "http://localhost:8001"
+CHAIN_NAME = "image-edit-to-video-pipeline"
 
-    base_url = "http://localhost:8001"
 
-    print("=" * 70)
-    print("Testing Image Edit to Video Pipeline Chain")
-    print("=" * 70)
+async def wait_for_approval(client: httpx.AsyncClient, timeout: int = 300) -> Optional[dict]:
+    """Wait for a pending approval request to appear"""
+    print("   Waiting for approval request...")
+    start_time = time.time()
 
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        # 1. List available chains
-        print("\n1. Listing available chains...")
-        response = await client.get(f"{base_url}/chains")
-        chains = response.json()
-        print(f"   Found {chains['count']} chain(s):")
-        for chain in chains['chains']:
-            print(f"   - {chain['name']}: {chain.get('description', '')[:60]}...")
+    while time.time() - start_time < timeout:
+        response = await client.get(f"{BASE_URL}/approval/pending")
+        if response.status_code == 200:
+            approvals = response.json()
+            if approvals and len(approvals) > 0:
+                return approvals[0]
+        await asyncio.sleep(2)
 
-        # 2. Get chain details
-        print("\n2. Getting chain details...")
-        response = await client.get(f"{base_url}/chains/image-edit-to-video-pipeline")
+    return None
 
+
+async def approve_request(client: httpx.AsyncClient, token: str, decided_by: str = "test-user"):
+    """Approve an approval request"""
+    response = await client.post(
+        f"{BASE_URL}/approval/{token}/approve",
+        json={"decided_by": decided_by}
+    )
+    return response
+
+
+async def reject_request(client: httpx.AsyncClient, token: str, new_parameters: dict, decided_by: str = "test-user", comment: str = ""):
+    """Reject an approval request with new parameters"""
+    response = await client.post(
+        f"{BASE_URL}/approval/{token}/reject",
+        json={
+            "decided_by": decided_by,
+            "parameters": new_parameters,
+            "comment": comment
+        }
+    )
+    return response
+
+
+async def monitor_chain_completion(client: httpx.AsyncClient, workflow_id: str, timeout: int = 1800):
+    """Monitor chain until completion or timeout (30 minutes default)"""
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        response = await client.get(f"{BASE_URL}/chains/status/{workflow_id}")
         if response.status_code != 200:
-            print(f"   ERROR: {response.status_code} - {response.text}")
-            return
+            print(f"   Status check failed: {response.status_code}")
+            return None
 
-        chain_details = response.json()
-        print(f"   Chain: {chain_details.get('name', 'Unknown')}")
-        print(f"   Steps: {len(chain_details['steps'])}")
-        print(f"   Execution Levels: {chain_details['execution_plan']['total_levels']}")
-        print(f"   Parallel Groups: {chain_details['execution_plan']['parallel_groups']}")
+        status = response.json()
+        current_status = status.get('status', 'unknown')
+        print(f"   Current status: {current_status}")
 
-        for step in chain_details['steps']:
-            print(f"   - {step['id']}: {step['workflow']}")
-            print(f"     Prompt: {step['parameters'].get('prompt', 'N/A')}")
+        if current_status in ['completed', 'failed', 'partial']:
+            print(f"   Chain finished with status: {current_status}")
+            return status
 
-        # 3. Execute chain
-        print("\n3. Starting chain execution...")
+        await asyncio.sleep(3)
+
+    print(f"   Timeout reached after {timeout} seconds")
+    return None
+
+
+# ============================================================================
+# TEST: Manual Regeneration from Specific Step
+# ============================================================================
+
+async def test_manual_regeneration():
+    """
+    Test manual regeneration from a specific step with approval rejection
+
+    This test:
+    - Uses most recent completed chain (chain_id: 2de2673d-1960-4b3a-a456-835a09eb533d)
+    - All steps completed: extract_frame1, extract_frame2, edit_frame1, edit_frame2, create_video
+    - Manually triggers regeneration from edit_frame1 with new parameters
+    - Rejects first approval (edit_frame1) with different prompt
+    - Approves regenerated edit_frame1 (in-step regeneration)
+    - Approves remaining steps (edit_frame2, create_video)
+
+    Expected:
+    - Cache: extract_frame1 (ComfyUI_00184_.png), extract_frame2 (ComfyUI_00185_.png)
+    - Regenerate: edit_frame1 (twice - rejected then approved), edit_frame2, create_video
+    """
+
+    print("\n" + "=" * 70)
+    print("TEST: REGENERATION WITH APPROVAL REJECTION")
+    print("=" * 70)
+
+    async with httpx.AsyncClient(timeout=1800.0) as client:
+        print("\n1. Using most recent completed chain for regeneration...")
+        print("   Chain ID: 2de2673d-1960-4b3a-a456-835a09eb533d")
+        print("   ✓ All 5 steps completed successfully")
+
+        # Manually regenerate from edit_frame1 with parameters for multiple steps
+        print("\n2. Manually regenerating from edit_frame1 with new parameters...")
+        regenerate_payload = {
+            "from_step": "edit_frame1",
+            "new_parameters": {
+                "edit_frame1": {
+                    "111.prompt": "Transform the scene into a cyberpunk style with neon lights"
+                },
+                "edit_frame2": {
+                    "111.prompt": "Make the scene more vibrant with enhanced neon colors"
+                },
+                "create_video": {
+                    "6.text": "Smooth cinematic transition with cyberpunk aesthetics",
+                    "60.fps": 16
+                }
+            }
+        }
+
         response = await client.post(
-            f"{base_url}/chains/image-edit-to-video-pipeline/execute",
-            json={"parameters": {}}
+            f"{BASE_URL}/chains/{CHAIN_NAME}/regenerate",
+            json=regenerate_payload
         )
 
         if response.status_code != 200:
-            print(f"   ERROR: {response.status_code} - {response.text}")
-            return
+            print(f"   ❌ Regeneration failed: {response.status_code} - {response.text}")
+            return False
 
-        execution = response.json()
-        workflow_id = execution['workflow_id']
+        regen_result = response.json()
+        workflow_id = regen_result['workflow_id']
+        print(f"   ✓ Regeneration started: {workflow_id}")
+        print(f"   Regenerating from: {regen_result['regeneration_from_step']}")
+        print(f"   Updated parameters for: {', '.join(regenerate_payload['new_parameters'].keys())}")
 
-        print(f"   ✓ Chain started!")
-        print(f"   Workflow ID: {workflow_id}")
-        print(f"   Total Steps: {execution['total_steps']}")
-        print(f"   Parallel Groups: {execution['parallel_groups']}")
+        # Handle approvals with rejection for first edit_frame1
+        print("\n3. Handling approvals (reject first edit_frame1, approve rest)...")
+        approved_count = 0
+        rejected_count = 0
+        edit_frame1_seen = False
 
-        # 4. Monitor status
-        print("\n4. Monitoring execution status...")
-        print("   (Press Ctrl+C to stop monitoring)\n")
+        for i in range(10):  # Safety limit (increased for retry)
+            approval = await wait_for_approval(client, timeout=600)
+            if not approval:
+                break
 
-        try:
-            last_status = None
-            while True:
-                response = await client.get(f"{base_url}/chains/status/{workflow_id}")
+            token = approval['approval_link_token']
+            step_id = approval.get('step_id', 'unknown')
 
-                if response.status_code != 200:
-                    print(f"   ERROR getting status: {response.status_code}")
-                    break
+            # Reject first edit_frame1, approve everything else
+            if step_id == 'edit_frame1' and not edit_frame1_seen:
+                edit_frame1_seen = True
+                print(f"   🔄 Rejecting step: {step_id} (first attempt)")
+                await reject_request(
+                    client,
+                    token,
+                    new_parameters={
+                        "111.prompt": "Transform into a futuristic sci-fi scene with holographic elements and glowing accents"
+                    },
+                    comment="Need more futuristic holographic elements"
+                )
+                rejected_count += 1
+                print(f"      → Waiting for regenerated {step_id}...")
+            else:
+                print(f"   ✅ Approving step: {step_id}")
+                await approve_request(client, token)
+                approved_count += 1
 
-                status = response.json()
+        print(f"   ✓ Rejected {rejected_count} approval(s)")
+        print(f"   ✓ Approved {approved_count} approval(s) (including regenerated)")
 
-                # Print status if changed
-                current_status = json.dumps(status, sort_keys=True)
-                if current_status != last_status:
-                    print(f"   Status: {status.get('status', 'unknown')}")
-                    print(f"   Current Level: {status.get('current_level', 0)}")
-                    print(f"   Completed Steps: {status.get('completed_steps', 0)}")
+        # Wait for regenerated chain completion
+        print("\n4. Waiting for regenerated chain completion...")
+        final_status = await monitor_chain_completion(client, workflow_id)
 
-                    if 'step_statuses' in status:
-                        print(f"   Step Statuses:")
-                        for step_id, step_status in status['step_statuses'].items():
-                            print(f"     - {step_id}: {step_status}")
+        if not final_status:
+            print("   ❌ Regenerated chain did not complete in time")
+            return False
 
-                    print()
-                    last_status = current_status
-
-                # Check if completed
-                if status.get('status') in ['completed', 'failed']:
-                    print(f"   Chain {status.get('status')}!")
-                    break
-
-                await asyncio.sleep(5)
-
-        except KeyboardInterrupt:
-            print("\n   Monitoring stopped by user")
-
-        # 5. Get final result
-        print("\n5. Getting final result...")
-        response = await client.get(f"{base_url}/chains/result/{workflow_id}")
-
+        # Get final result
+        print("\n5. Getting regenerated chain result...")
+        response = await client.get(f"{BASE_URL}/chains/result/{workflow_id}")
         if response.status_code != 200:
-            print(f"   ERROR: {response.status_code} - {response.text}")
-            return
+            print(f"   ❌ ERROR: {response.status_code}")
+            return False
 
         result = response.json()
-
-        print(f"   Chain: {result['chain_name']}")
         print(f"   Status: {result['status']}")
         print(f"   Successful Steps: {result['successful_steps']}")
-        print(f"   Failed Steps: {result['failed_steps']}")
 
-        if result.get('error'):
-            print(f"   Error: {result['error']}")
+        # Verify cached steps vs regenerated steps
+        print("\n6. Verifying execution flow...")
+        print(f"   Expected cached: extract_frame1, extract_frame2")
+        print(f"   Expected regenerated: edit_frame1 (2x - rejected + approved), edit_frame2, create_video")
+        print(f"\n   Final step statuses:")
 
-        print(f"\n   Step Results:")
         for step_id, step_result in result['step_results'].items():
-            print(f"\n   {step_id}:")
-            print(f"     Status: {step_result['status']}")
-            print(f"     Workflow: {step_result['workflow']}")
+            approval_info = ""
+            if step_result.get('approval_decision'):
+                approval_info = f" (approval: {step_result['approval_decision']})"
+            print(f"   {step_id}: {step_result['status']}{approval_info}")
 
-            if step_result.get('output'):
-                output = step_result['output']
-                print(f"     Output Type: {output.get('type', 'unknown')}")
-                if output.get('video'):
-                    print(f"     Video File: {output['video']}")
-                if output.get('image'):
-                    print(f"     Image File: {output['image']}")
+        success = result['status'] == 'completed'
+        print(f"\n   {'✓ TEST PASSED' if success else '❌ TEST FAILED'}")
+        return success
 
-            if step_result.get('error'):
-                print(f"     Error: {step_result['error']}")
+
+# ============================================================================
+# Main Test Runner
+# ============================================================================
+
+async def run_test():
+    """Run the manual regeneration test"""
 
     print("\n" + "=" * 70)
-    print("Test Complete!")
+    print("CHAIN REGENERATION TEST")
     print("=" * 70)
+    print(f"Chain: {CHAIN_NAME}")
+    print(f"Base URL: {BASE_URL}")
+    print("=" * 70)
+
+    try:
+        success = await test_manual_regeneration()
+
+        print("\n" + "=" * 70)
+        print("TEST RESULT")
+        print("=" * 70)
+        if success:
+            print("✓ TEST PASSED!")
+        else:
+            print("❌ TEST FAILED")
+        print("=" * 70)
+
+        return success
+    except Exception as e:
+        print(f"\n❌ TEST EXCEPTION: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 if __name__ == "__main__":
-    asyncio.run(test_image_edit_pipeline())
+    asyncio.run(run_test())

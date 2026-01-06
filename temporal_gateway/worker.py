@@ -34,6 +34,7 @@ from temporal_gateway.activities import (
     update_chain_status_activity,
     update_workflow_status_activity,
     get_workflow_artifacts,
+    create_approval_request_activity,
 )
 from gateway.core import load_balancer
 from temporal_gateway.database import init_db
@@ -99,6 +100,7 @@ async def main():
             update_chain_status_activity,
             update_workflow_status_activity,
             get_workflow_artifacts,
+            create_approval_request_activity,
         ]
     )
 

@@ -15,8 +15,6 @@ from simpleeval import simple_eval, NameNotDefined
 from .models import (
     ChainDefinition,
     ChainStepDefinition,
-    ExecutionPlan,
-    ExecutionNode,
     StepResult
 )
 
@@ -33,7 +31,7 @@ class TemplateResolutionError(Exception):
 
 class ChainInterpreter:
     """
-    Interprets chain definitions and creates execution plans
+    Interprets chain definitions and provides validation/template utilities
 
     Responsibilities:
     1. Parse YAML chain definitions
@@ -41,7 +39,6 @@ class ChainInterpreter:
     3. Build dependency DAG using graphlib
     4. Resolve Jinja2 templates in parameters
     5. Evaluate conditions
-    6. Create ExecutionPlan for the Chain Engine
     """
 
     def __init__(self):
@@ -141,84 +138,6 @@ class ChainInterpreter:
             raise ChainValidationError(f"Chain contains circular dependencies: {e}")
 
         return ts
-
-    def create_execution_plan(self, chain: ChainDefinition) -> ExecutionPlan:
-        """
-        Create execution plan from chain definition
-
-        This validates the chain, builds the DAG, and creates a sorted execution plan.
-
-        Args:
-            chain: Chain definition
-
-        Returns:
-            ExecutionPlan ready for execution
-
-        Raises:
-            ChainValidationError: If chain is invalid
-        """
-        # Validate
-        self.validate_dependencies(chain)
-
-        # Validate no cycles (this calls prepare() internally)
-        self.build_dag(chain)
-
-        # Build a fresh TopologicalSorter for execution planning
-        ts = TopologicalSorter()
-        for step in chain.steps:
-            if step.depends_on:
-                ts.add(step.id, *step.depends_on)
-            else:
-                ts.add(step.id)
-
-        # Get execution order and parallel levels
-        nodes = []
-        levels = {}
-        dependency_graph = {}
-        step_lookup = {step.id: step for step in chain.steps}
-
-        level = 0
-        ts.prepare()
-
-        # Get parallel groups
-        while ts.is_active():
-            # Get all nodes ready to execute (no pending dependencies)
-            ready = ts.get_ready()
-
-            if not ready:
-                break
-
-            # All nodes in 'ready' can execute in parallel
-            levels[level] = list(ready)
-
-            for step_id in ready:
-                step = step_lookup[step_id]
-
-                # Create execution node (templates NOT resolved yet - that happens at runtime)
-                node = ExecutionNode(
-                    step_id=step.id,
-                    workflow=step.workflow,
-                    parameters=step.parameters.copy(),  # Keep templates as-is
-                    condition=step.condition,
-                    dependencies=set(step.depends_on),
-                    level=level
-                )
-                nodes.append(node)
-
-                # Build dependency graph
-                dependency_graph[step_id] = set(step.depends_on)
-
-                # Mark as done
-                ts.done(step_id)
-
-            level += 1
-
-        return ExecutionPlan(
-            chain_name=chain.name,
-            nodes=nodes,
-            levels=levels,
-            dependency_graph=dependency_graph
-        )
 
     def resolve_templates(
         self,
@@ -373,20 +292,3 @@ class ChainInterpreter:
 
         return context
 
-    def get_execution_summary(self, plan: ExecutionPlan) -> Dict[str, Any]:
-        """
-        Get human-readable summary of execution plan
-
-        Args:
-            plan: Execution plan
-
-        Returns:
-            Summary dict with execution details
-        """
-        return {
-            "chain_name": plan.chain_name,
-            "total_steps": len(plan.nodes),
-            "total_levels": plan.get_total_levels(),
-            "parallel_groups": plan.get_parallel_groups(),
-            "execution_order": [node.step_id for node in plan.nodes],
-        }

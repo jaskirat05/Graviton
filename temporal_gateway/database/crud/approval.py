@@ -24,7 +24,7 @@ def create_approval_request(
     config_metadata: Optional[Dict[str, Any]] = None,
 ) -> ApprovalRequest:
     """
-    Create a new approval request
+    Create a new approval request (idempotent - returns existing if already created)
 
     Args:
         session: Database session
@@ -38,8 +38,17 @@ def create_approval_request(
         config_metadata: Additional configuration for external systems
 
     Returns:
-        Created ApprovalRequest
+        Created or existing ApprovalRequest
     """
+    # Check if approval request already exists for this artifact (idempotent for retries)
+    # Each step produces a unique artifact, so use artifact_id as the key
+    existing = session.query(ApprovalRequest).filter(
+        ApprovalRequest.artifact_id == artifact_id
+    ).first()
+
+    if existing:
+        return existing
+
     # Generate secure token for approval link
     approval_link_token = secrets.token_urlsafe(32)
 

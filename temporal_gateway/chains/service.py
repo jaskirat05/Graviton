@@ -12,7 +12,7 @@ from typing import List, Optional, Dict, Any
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from .interpreter import ChainInterpreter, ChainValidationError
-from .models import ChainDefinition, ExecutionPlan
+from .models import ChainDefinition, ExecutionGraph, StepNode
 
 
 # Global interpreter instance
@@ -65,30 +65,53 @@ def load_chain_from_dict(data: Dict[str, Any]) -> ChainDefinition:
     return _interpreter.load_from_dict(data)
 
 
-def create_execution_plan(chain: ChainDefinition) -> ExecutionPlan:
+def create_execution_graph(chain: ChainDefinition) -> ExecutionGraph:
     """
-    Create an execution plan from a chain definition
+    Create an execution graph (NetworkX DAG) from a chain definition
 
-    This validates the chain, builds the DAG, and creates a sorted execution plan
-    with parallel execution groups.
+    This validates the chain and builds a NetworkX-based execution graph
+    for the new chain execution architecture.
 
     Args:
         chain: Chain definition
 
     Returns:
-        ExecutionPlan ready for execution
+        ExecutionGraph ready for execution
 
     Raises:
         ChainValidationError: If chain is invalid (cycles, missing deps, etc.)
 
     Example:
         chain = load_chain("chains/my_chain.yaml")
-        plan = create_execution_plan(chain)
+        graph = create_execution_graph(chain)
 
-        print(f"Parallel groups: {plan.get_parallel_groups()}")
-        # [[step1], [step2, step3], [step4]]  <- step2 and step3 run in parallel
+        print(f"Execution levels: {graph.get_execution_levels()}")
     """
-    return _interpreter.create_execution_plan(chain)
+    # Validate chain
+    _interpreter.validate_dependencies(chain)
+    _interpreter.build_dag(chain)
+
+    # Create execution graph
+    graph = ExecutionGraph(chain_name=chain.name)
+
+    # Add all steps as nodes
+    for step in chain.steps:
+        node = StepNode(
+            step_id=step.id,
+            workflow=step.workflow,
+            parameters=step.parameters or {},
+            dependencies=step.depends_on or [],
+            requires_approval=step.requires_approval or False,
+            approval_config=step.approval or {},  # FIX: Include approval configuration
+            condition=step.condition,
+            status="pending"
+        )
+        graph.add_node(node)
+
+    # Validate DAG (no cycles)
+    graph.validate_dag()
+
+    return graph
 
 
 def validate_chain(chain: ChainDefinition) -> Dict[str, Any]:
@@ -125,28 +148,6 @@ def validate_chain(chain: ChainDefinition) -> Dict[str, Any]:
         errors.append(str(e))
 
     return {"valid": False, "errors": errors}
-
-
-def get_execution_summary(plan: ExecutionPlan) -> Dict[str, Any]:
-    """
-    Get a human-readable summary of an execution plan
-
-    Args:
-        plan: Execution plan
-
-    Returns:
-        Summary dict with execution details
-
-    Example:
-        chain = load_chain("chains/my_chain.yaml")
-        plan = create_execution_plan(chain)
-        summary = get_execution_summary(plan)
-
-        print(f"Total steps: {summary['total_steps']}")
-        print(f"Execution levels: {summary['total_levels']}")
-        print(f"Parallel groups: {summary['parallel_groups']}")
-    """
-    return _interpreter.get_execution_summary(plan)
 
 
 def discover_chains(directory: str | Path) -> List[Dict[str, Any]]:

@@ -17,6 +17,41 @@ router = APIRouter(prefix="/approval", tags=["approval"])
 
 
 # Routes
+@router.get("/pending")
+async def get_pending_approvals():
+    """
+    Get all pending approval requests
+
+    Returns a list of pending approval requests with basic info
+
+    Example:
+        GET /approval/pending
+    """
+    try:
+        from ...database import get_session
+        from ...database.crud.approval import get_pending_approval_requests
+
+        with get_session() as session:
+            pending_requests = get_pending_approval_requests(session, limit=100)
+
+            return [
+                {
+                    "id": req.id,
+                    "approval_link_token": req.approval_link_token,
+                    "artifact_id": req.artifact_id,
+                    "artifact_view_url": req.artifact_view_url,
+                    "step_id": req.step_id,
+                    "chain_id": req.chain_id,
+                    "created_at": req.created_at.isoformat() if req.created_at else None,
+                    "link_expires_at": req.link_expires_at.isoformat() if req.link_expires_at else None,
+                }
+                for req in pending_requests
+            ]
+    except Exception as e:
+        logger.error(f"Error getting pending approvals: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/{token}")
 async def get_approval_request(token: str):
     """
@@ -32,6 +67,9 @@ async def get_approval_request(token: str):
     """
     try:
         service = get_approval_service()
+        if service is None:
+            logger.error("Approval service not initialized!")
+            raise HTTPException(status_code=500, detail="Approval service not initialized")
         details = await service.get_approval_details(token)
         return details
     except ValueError as e:
@@ -83,7 +121,15 @@ async def approve_artifact(token: str, request: ApproveRequest):
     """
     try:
         service = get_approval_service()
+        if service is None:
+            logger.error("Approval service not initialized!")
+            raise HTTPException(status_code=500, detail="Approval service not initialized")
+        if service.temporal_client is None:
+            logger.error("Approval service has no Temporal client!")
+            raise HTTPException(status_code=500, detail="Approval service missing Temporal client")
+        logger.info(f"Approving token {token[:16]}... with service that has client: {service.temporal_client is not None}")
         result = await service.approve(token, request.decided_by)
+        logger.info(f"Approve result: {result}")
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

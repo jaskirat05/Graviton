@@ -15,6 +15,12 @@ steps:
   - id: extract_frame1
     workflow: imageSave
     description: Extract first frame from video
+    requires_approval: true
+    approval:
+      timeout_hours: 24
+      on_rejected: regenerate
+      max_retries: 2
+      timeout_action: auto_reject
     parameters:
       1.video: "ComfyUI_00012_.mp4"
       1.select_every_nth: 1
@@ -25,6 +31,12 @@ steps:
   - id: extract_frame2
     workflow: imageSave
     description: Extract frame after skipping 172 frames
+    requires_approval: true
+    approval:
+      timeout_hours: 24
+      on_rejected: regenerate
+      max_retries: 2
+      timeout_action: auto_reject
     parameters:
       1.video: "ComfyUI_00012_.mp4"
       1.select_every_nth: 1
@@ -36,6 +48,12 @@ steps:
     workflow: qwen_image_edit
     description: AI edit first frame
     depends_on: [extract_frame1]
+    requires_approval: true
+    approval:
+      timeout_hours: 24
+      on_rejected: regenerate
+      max_retries: 2
+      timeout_action: auto_reject
     parameters:
       78.image: "{{ extract_frame1.output.image }}"
       111.prompt: "Make the scene more vibrant and colorful with enhanced details"
@@ -45,6 +63,12 @@ steps:
     workflow: qwen_image_edit
     description: AI edit second frame
     depends_on: [extract_frame2]
+    requires_approval: true
+    approval:
+      timeout_hours: 24
+      on_rejected: regenerate
+      max_retries: 2
+      timeout_action: auto_reject
     parameters:
       78.image: "{{ extract_frame2.output.image }}"
       111.prompt: "Make the scene more vibrant and colorful with enhanced details"
@@ -54,6 +78,12 @@ steps:
     workflow: firstEndTovideo
     description: Create video transitioning from first to last edited frame
     depends_on: [edit_frame1, edit_frame2]
+    requires_approval: true
+    approval:
+      timeout_hours: 24
+      on_rejected: regenerate
+      max_retries: 2
+      timeout_action: auto_reject
     parameters:
       62.image: "{{ edit_frame1.output.image }}"  # First frame input
       68.image: "{{ edit_frame2.output.image }}"  # Last frame input

@@ -7,7 +7,7 @@ This gateway uses Temporal for durable workflow execution.
 import uuid
 import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
@@ -20,11 +20,12 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from temporal_gateway.workflows import ComfyUIWorkflow, WorkflowExecutionRequest, ChainExecutorWorkflow
 from temporal_gateway.workflow_registry import get_registry
+from temporal_gateway.logging_config import setup_logging, get_logger
 from gateway.core import load_balancer, image_storage
 from gateway.models import ComfyUIServer
 from temporal_gateway.chains import (
     load_chain,
-    create_execution_plan,
+    create_execution_graph,
     discover_chains,
     ChainEngine
 )
@@ -50,6 +51,10 @@ async def startup():
     """Connect to Temporal Server and initialize workflow registry on startup"""
     global temporal_client, workflow_registry, chain_engine
 
+    # Setup colored logging with file output
+    log_dir = Path(__file__).parent / "logs"
+    logger, log_file = setup_logging(log_dir=log_dir, log_level="INFO")
+
     # Connect to Temporal
     temporal_client = await Client.connect("localhost:7233")
 
@@ -63,14 +68,16 @@ async def startup():
     # Initialize approval service with temporal client
     initialize_approval_service(temporal_client)
 
-    print("=" * 60)
-    print("Temporal Gateway Started")
-    print("=" * 60)
-    print(f"Connected to Temporal: localhost:7233")
-    print(f"Gateway API: http://localhost:8001")
-    print(f"Temporal UI: http://localhost:8233")
-    print(f"Workflows discovered: {summary['discovered']}")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("🚀 Temporal Gateway Started")
+    logger.info("=" * 60)
+    logger.info("Connected to Temporal", host="localhost:7233")
+    logger.info("Gateway API", url="http://localhost:8001")
+    logger.info("Temporal UI", url="http://localhost:8233")
+    logger.info("Workflows discovered", count=summary['discovered'])
+    if log_file:
+        logger.info("Log file", path=str(log_file))
+    logger.info("=" * 60)
 
 
 @app.on_event("shutdown")
@@ -385,6 +392,37 @@ async def serve_image(filename: str):
     )
 
 
+@app.get("/artifacts/{artifact_id}")
+async def serve_artifact(artifact_id: str):
+    """Serve an artifact (image/video) by ID"""
+    from temporal_gateway.database import get_session
+    from temporal_gateway.database.crud.artifact import get_artifact
+
+    with get_session() as session:
+        artifact = get_artifact(session, artifact_id)
+
+        if not artifact:
+            raise HTTPException(status_code=404, detail="Artifact not found")
+
+        artifact_path = Path(artifact.local_path)
+
+        if not artifact_path.exists():
+            raise HTTPException(status_code=404, detail="Artifact file not found on disk")
+
+        # Determine media type based on file type
+        media_type_map = {
+            "image": f"image/{artifact.file_format or 'png'}",
+            "video": f"video/{artifact.file_format or 'mp4'}",
+        }
+        media_type = media_type_map.get(artifact.file_type, "application/octet-stream")
+
+        return StreamingResponse(
+            iter([artifact_path.read_bytes()]),
+            media_type=media_type,
+            headers={"Content-Disposition": f"inline; filename={artifact.filename}"}
+        )
+
+
 # Server management endpoints (reuse existing load balancer)
 @app.post("/servers/register")
 async def register_server(server: ComfyUIServer):
@@ -461,7 +499,7 @@ async def get_chain_details(chain_name: str):
             raise HTTPException(status_code=404, detail=f"Chain '{chain_name}' not found")
 
         chain = load_chain(chain_path)
-        plan = create_execution_plan(chain)
+        graph = create_execution_graph(chain)
 
         return {
             "name": chain.name,
@@ -478,9 +516,9 @@ async def get_chain_details(chain_name: str):
                 for step in chain.steps
             ],
             "execution_plan": {
-                "total_levels": plan.get_total_levels(),
-                "parallel_groups": plan.get_parallel_groups(),
-                "total_steps": len(plan.nodes)
+                "total_levels": graph.get_total_levels(),
+                "parallel_groups": graph.get_level_groups(),
+                "total_steps": len(graph.nodes)
             },
             "metadata": chain.metadata
         }
@@ -494,6 +532,13 @@ async def get_chain_details(chain_name: str):
 class ChainExecutionRequest(BaseModel):
     """Request to execute a chain"""
     parameters: Dict[str, Any] = {}
+
+
+class ChainRegenerationRequest(BaseModel):
+    """Request to regenerate chain from a specific step"""
+    from_step: str
+    new_parameters: Dict[str, Any] = {}
+    use_version: Optional[int] = None  # None = use latest
 
 
 @app.post("/chains/{chain_name}/execute")
@@ -510,20 +555,24 @@ async def execute_chain(chain_name: str, request: ChainExecutionRequest):
             raise HTTPException(status_code=404, detail=f"Chain '{chain_name}' not found")
 
         chain = load_chain(chain_path)
-        plan = create_execution_plan(chain)
+        graph = create_execution_graph(chain)
 
         # Execute via chain engine
         workflow_id = await chain_engine.execute_chain(
-            plan=plan,
+            graph=graph,
             initial_parameters=request.parameters
         )
+
+        # Get execution levels for response
+        levels = graph.get_execution_levels()
+        total_steps = len(graph.nodes)
 
         return {
             "workflow_id": workflow_id,
             "chain_name": chain.name,
             "status": "started",
-            "total_steps": len(plan.nodes),
-            "parallel_groups": plan.get_parallel_groups(),
+            "total_steps": total_steps,
+            "parallel_groups": [[step_id for step_id in level] for level in levels],
             "message": f"Chain execution started. Use /chains/status/{workflow_id} to check progress."
         }
 
@@ -591,6 +640,55 @@ async def get_chain_result(workflow_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get chain result: {str(e)}")
+
+
+@app.post("/chains/{chain_name}/regenerate")
+async def regenerate_chain(chain_name: str, request: ChainRegenerationRequest):
+    """
+    Regenerate chain from a specific step with new parameters
+
+    This creates a new chain version that:
+    - Caches results from previous executions
+    - Re-executes from the specified step with new parameters
+    - Continues through all descendant steps
+
+    Args:
+        chain_name: Name of the chain
+        request: Regeneration request with from_step and new parameters
+
+    Returns:
+        New workflow_id and version info
+    """
+    try:
+        # Load chain definition
+        chain_path = Path("chains") / f"{chain_name}.yaml"
+        if not chain_path.exists():
+            raise HTTPException(status_code=404, detail=f"Chain '{chain_name}' not found")
+
+        chain = load_chain(chain_path)
+        graph = create_execution_graph(chain)
+
+        # Execute via chain engine with regeneration
+        workflow_id = await chain_engine.regenerate_chain(
+            chain_name=chain_name,
+            graph=graph,
+            from_step=request.from_step,
+            new_parameters=request.new_parameters,
+            use_version=request.use_version
+        )
+
+        return {
+            "workflow_id": workflow_id,
+            "chain_name": chain_name,
+            "status": "started",
+            "regeneration_from_step": request.from_step,
+            "message": f"Chain regeneration started from step '{request.from_step}'. Use /chains/status/{workflow_id} to check progress."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start chain regeneration: {str(e)}")
 
 
 if __name__ == "__main__":
