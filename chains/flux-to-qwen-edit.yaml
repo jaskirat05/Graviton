@@ -1,0 +1,46 @@
+name: flux-to-qwen-edit
+description: |
+  Generates an image using Flux Dev and passes it to Qwen Image Edit
+
+inputs:
+  reference_image:
+    source: "/home/jaskirat/Downloads/providence-animal-hospital-charlotte-are-rabbits-rodents-blog.jpeg"
+steps:
+  - id: generate_image
+    workflow: fluxdev
+    description: Generate image with Flux Dev
+    requires_approval: true
+    approval:
+      timeout_hours: 24
+      on_rejected: regenerate
+      max_retries: 2
+      timeout_action: auto_reject
+    parameters:
+      6.text: "Make an image of an empty coffee cup"
+      27.width: 1024
+      27.height: 1024
+      31.steps: 20
+      31.cfg: 1
+      35.guidance: 3.5
+
+  - id: qwen_edit
+    workflow: image_qwen_edit
+    description: Edit generated image with Qwen using reference
+    depends_on: [generate_image]
+    requires_approval: true
+    approval:
+      timeout_hours: 24
+      on_rejected: regenerate
+      max_retries: 2
+      timeout_action: auto_reject
+    parameters:
+      78.image: "{{ generate_image.output.image }}"
+      101.image: "{{ inputs.reference_image }}"
+      76.prompt: "Put the rabbit's photo on the cup as it's label with headline Rabbit coffee roasters"
+      3.steps: 4
+      3.cfg: 1
+
+metadata:
+  author: ComfyAutomate
+  version: "1.0"
+  tags: ["flux", "qwen", "image-edit", "pipeline"]

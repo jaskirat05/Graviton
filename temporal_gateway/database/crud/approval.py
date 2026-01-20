@@ -15,11 +15,11 @@ from ..models import ApprovalRequest
 def create_approval_request(
     session: Session,
     artifact_id: str,
-    temporal_workflow_id: str,
+    job_id: str,
     artifact_view_url: str,
     chain_id: Optional[str] = None,
     step_id: Optional[str] = None,
-    temporal_run_id: Optional[str] = None,
+    job_run_id: Optional[str] = None,
     link_expiration_hours: Optional[int] = None,
     config_metadata: Optional[Dict[str, Any]] = None,
 ) -> ApprovalRequest:
@@ -29,11 +29,11 @@ def create_approval_request(
     Args:
         session: Database session
         artifact_id: ID of artifact to approve
-        temporal_workflow_id: Temporal workflow ID to signal when decision is made
+        job_id: Job ID to signal when decision is made
         artifact_view_url: URL where approvers can view the artifact
         chain_id: Optional chain context
         step_id: Optional step identifier in chain
-        temporal_run_id: Optional Temporal run ID
+        job_run_id: Optional job run ID
         link_expiration_hours: Optional hours until approval link expires
         config_metadata: Additional configuration for external systems
 
@@ -62,8 +62,8 @@ def create_approval_request(
         artifact_id=artifact_id,
         chain_id=chain_id,
         step_id=step_id,
-        temporal_workflow_id=temporal_workflow_id,
-        temporal_run_id=temporal_run_id,
+        job_id=job_id,
+        job_run_id=job_run_id,
         approval_link_token=approval_link_token,
         artifact_view_url=artifact_view_url,
         link_expires_at=link_expires_at,

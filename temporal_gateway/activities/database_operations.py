@@ -19,13 +19,14 @@ from temporal_gateway.database import (
     update_workflow_status,
     get_workflow,
 )
+from temporal_gateway.services.broadcast import publish_chain_event
 
 
 @activity.defn
 async def create_chain_record(
     chain_name: str,
-    temporal_workflow_id: str,
-    temporal_run_id: str,
+    job_id: str,
+    job_run_id: str,
     chain_definition: Optional[Dict[str, Any]] = None,
     description: Optional[str] = None,
 ) -> str:
@@ -34,8 +35,8 @@ async def create_chain_record(
 
     Args:
         chain_name: Chain name
-        temporal_workflow_id: Temporal workflow ID
-        temporal_run_id: Temporal run ID
+        job_id: Job ID (Temporal workflow ID)
+        job_run_id: Job run ID (Temporal run ID)
         chain_definition: Full chain definition (YAML as dict)
         description: Optional description
 
@@ -49,8 +50,8 @@ async def create_chain_record(
             chain = create_chain(
                 session=session,
                 name=chain_name,
-                temporal_workflow_id=temporal_workflow_id,
-                temporal_run_id=temporal_run_id,
+                job_id=job_id,
+                job_run_id=job_run_id,
                 chain_definition=chain_definition,
                 description=description,
                 status="initializing"
@@ -70,8 +71,8 @@ async def create_workflow_record(
     prompt_id: str,
     chain_id: Optional[str] = None,
     step_id: Optional[str] = None,
-    temporal_workflow_id: Optional[str] = None,
-    temporal_run_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+    job_run_id: Optional[str] = None,
     workflow_definition: Optional[Dict[str, Any]] = None,
     parameters: Optional[Dict[str, Any]] = None,
 ) -> str:
@@ -84,8 +85,8 @@ async def create_workflow_record(
         prompt_id: ComfyUI prompt ID
         chain_id: Optional chain ID
         step_id: Optional step ID (for chain workflows)
-        temporal_workflow_id: Temporal workflow ID
-        temporal_run_id: Temporal run ID
+        job_id: Job ID (Temporal workflow ID)
+        job_run_id: Job run ID (Temporal run ID)
         workflow_definition: Workflow JSON
         parameters: Resolved parameters
 
@@ -103,8 +104,8 @@ async def create_workflow_record(
                 prompt_id=prompt_id,
                 chain_id=chain_id,
                 step_id=step_id,
-                temporal_workflow_id=temporal_workflow_id,
-                temporal_run_id=temporal_run_id,
+                job_id=job_id,
+                job_run_id=job_run_id,
                 workflow_definition=workflow_definition,
                 parameters=parameters,
                 status="queued"
@@ -146,6 +147,27 @@ async def update_chain_status_activity(
             )
             activity.logger.info(f"✓ Updated chain status")
 
+        # Publish completion/failure events to Redis for SSE subscribers
+        if status == "completed":
+            await publish_chain_event(
+                chain_id=chain_id,
+                event={
+                    "type": "chain_completed",
+                    "chain_id": chain_id,
+                }
+            )
+            activity.logger.info(f"Published chain_completed event for chain {chain_id}")
+        elif status == "failed":
+            await publish_chain_event(
+                chain_id=chain_id,
+                event={
+                    "type": "chain_failed",
+                    "chain_id": chain_id,
+                    "error": error_message,
+                }
+            )
+            activity.logger.info(f"Published chain_failed event for chain {chain_id}")
+
     except Exception as e:
         activity.logger.error(f"Failed to update chain status: {e}")
         # Don't fail workflow for status update failures
@@ -180,6 +202,33 @@ async def update_workflow_status_activity(
     except Exception as e:
         activity.logger.error(f"Failed to update workflow status: {e}")
         # Don't fail workflow for status update failures
+
+
+@activity.defn
+async def publish_step_completed_activity(
+    chain_id: str,
+    step_id: str,
+) -> None:
+    """
+    Activity: Publish step_completed event to Redis
+
+    Args:
+        chain_id: Chain ID
+        step_id: Step ID that completed
+    """
+    try:
+        await publish_chain_event(
+            chain_id=chain_id,
+            event={
+                "type": "step_completed",
+                "chain_id": chain_id,
+                "step_id": step_id,
+            }
+        )
+        activity.logger.info(f"Published step_completed event for {step_id} in chain {chain_id}")
+    except Exception as e:
+        activity.logger.error(f"Failed to publish step_completed event: {e}")
+        # Don't fail workflow for event publish failures
 
 
 @activity.defn

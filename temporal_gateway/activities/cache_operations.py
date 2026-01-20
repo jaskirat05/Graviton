@@ -1,90 +1,33 @@
 """
 Cache Operations Activities
 
-Activities for building cache from database and managing chain versions.
+Temporal activities for cache operations. Uses centralized cache service.
 """
 
-import os
-from typing import Dict, Optional, List
+from typing import Dict, Optional, Set
 from temporalio import activity
-from sqlalchemy import select, and_, desc
-from sqlalchemy.orm import Session
 
-from ..database.session import get_session
-from ..database.models import Chain, Workflow, Artifact
-from ..chains.models import StepResult
+from ..services.cache import build_cache_from_database as _build_cache
 
 
 @activity.defn
 async def build_cache_from_database(
     chain_name: str,
-    exclude_step_id: Optional[str] = None
+    exclude_step_ids: Optional[Set[str]] = None
 ) -> Dict[str, Dict]:
     """
-    Build cache from latest completed workflows in database
-
-    Queries database for the most recent completed execution of each step
-    in the specified chain, regardless of which chain version they came from.
+    Activity: Build cache from database for chain regeneration.
 
     Args:
         chain_name: Name of chain to get cache from
-        exclude_step_id: Step to exclude (the one being regenerated)
+        exclude_step_ids: Steps to exclude (being regenerated + descendants)
 
     Returns:
-        Dict mapping step_id to StepResult dict
+        Dict mapping step_id to step data dict
     """
-    activity.logger.info(f"Building cache from database for chain: {chain_name}")
+    activity.logger.info(f"Building cache for chain: {chain_name}")
 
-    cache = {}
-
-    with get_session() as db:
-        # Get all distinct step_ids that have completed for this chain
-        # We need the latest completed workflow for each step
-
-        # Subquery to get latest workflow per step
-        from sqlalchemy import func
-
-        # Get workflows for this chain name
-        stmt = (
-            select(Workflow)
-            .join(Chain, Workflow.chain_id == Chain.id)
-            .where(
-                and_(
-                    Chain.name == chain_name,
-                    Workflow.status == 'completed',
-                    Workflow.step_id != exclude_step_id if exclude_step_id else True
-                )
-            )
-            .order_by(Workflow.completed_at.desc())
-        )
-
-        workflows = db.execute(stmt).scalars().all()
-
-        # Get latest workflow per step_id
-        seen_steps = set()
-        for wf in workflows:
-            if wf.step_id and wf.step_id not in seen_steps:
-                # Check if artifact still exists
-                artifact_valid = True
-                if wf.latest_artifact_id:
-                    artifact = db.get(Artifact, wf.latest_artifact_id)
-                    if not artifact or not os.path.exists(artifact.local_path):
-                        activity.logger.warning(
-                            f"Artifact {wf.latest_artifact_id} for step {wf.step_id} not found, will re-execute"
-                        )
-                        artifact_valid = False
-
-                if artifact_valid:
-                    cache[wf.step_id] = {
-                        "step_id": wf.step_id,
-                        "workflow": wf.workflow_name,
-                        "status": wf.status,
-                        "artifact_id": wf.latest_artifact_id,
-                        "workflow_db_id": wf.id,
-                        "server_address": wf.server_address,
-                        "parameters": {},  # Would need to store this in Workflow table
-                    }
-                    seen_steps.add(wf.step_id)
+    cache = _build_cache(chain_name, exclude_step_ids)
 
     activity.logger.info(f"Built cache with {len(cache)} steps: {list(cache.keys())}")
     return cache
@@ -165,7 +108,7 @@ async def get_chain_by_name_version(chain_name: str, version: Optional[int] = No
                 "version": chain.version,
                 "status": chain.status,
                 "regenerated_from_step_id": chain.regenerated_from_step_id,
-                "temporal_workflow_id": chain.temporal_workflow_id,
+                "job_id": chain.job_id,
                 "started_at": chain.started_at.isoformat() if chain.started_at else None,
                 "completed_at": chain.completed_at.isoformat() if chain.completed_at else None,
             }

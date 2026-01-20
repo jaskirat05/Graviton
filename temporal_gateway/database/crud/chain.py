@@ -15,20 +15,32 @@ def create_chain(
     session: Session,
     name: str,
     status: str = "initializing",
-    temporal_workflow_id: Optional[str] = None,
-    temporal_run_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+    job_run_id: Optional[str] = None,
     chain_definition: Optional[Dict[str, Any]] = None,
+    definition_hash: Optional[str] = None,
     description: Optional[str] = None,
+    regenerated_from_step_id: Optional[str] = None,
 ) -> Chain:
-    """Create a new chain execution record"""
+    """Create a new chain execution record with auto-incrementing version"""
+    # Get next version number for this chain name
+    latest = session.query(Chain).filter(
+        Chain.name == name
+    ).order_by(desc(Chain.version)).first()
+
+    next_version = (latest.version + 1) if latest else 1
+
     chain = Chain(
         id=str(uuid.uuid4()),
         name=name,
+        version=next_version,
         description=description,
-        temporal_workflow_id=temporal_workflow_id,
-        temporal_run_id=temporal_run_id,
+        job_id=job_id,
+        job_run_id=job_run_id,
         status=status,
         chain_definition=chain_definition,
+        definition_hash=definition_hash,
+        regenerated_from_step_id=regenerated_from_step_id,
         started_at=datetime.utcnow(),
     )
     session.add(chain)
@@ -42,9 +54,9 @@ def get_chain(session: Session, chain_id: str) -> Optional[Chain]:
     return session.query(Chain).filter(Chain.id == chain_id).first()
 
 
-def get_chain_by_temporal_id(session: Session, temporal_workflow_id: str) -> Optional[Chain]:
-    """Get chain by Temporal workflow ID"""
-    return session.query(Chain).filter(Chain.temporal_workflow_id == temporal_workflow_id).first()
+def get_chain_by_job_id(session: Session, job_id: str) -> Optional[Chain]:
+    """Get chain by job ID"""
+    return session.query(Chain).filter(Chain.job_id == job_id).first()
 
 
 def update_chain_status(
@@ -94,3 +106,61 @@ def delete_chain(session: Session, chain_id: str) -> bool:
     session.delete(chain)
     session.commit()
     return True
+
+
+def get_chain_by_hash(
+    session: Session,
+    definition_hash: str,
+    name: Optional[str] = None,
+) -> Optional[Chain]:
+    """
+    Get the latest chain with matching definition hash.
+
+    Used for cache lookup - find previous executions of the same definition.
+
+    Args:
+        session: Database session
+        definition_hash: Hash of chain definition
+        name: Optional chain name filter (for extra safety)
+
+    Returns:
+        Latest matching Chain or None
+    """
+    query = session.query(Chain).filter(
+        Chain.definition_hash == definition_hash
+    )
+    if name:
+        query = query.filter(Chain.name == name)
+
+    return query.order_by(desc(Chain.version)).first()
+
+
+def get_chains_by_hash(
+    session: Session,
+    definition_hash: str,
+    name: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 10,
+) -> List[Chain]:
+    """
+    Get all chains with matching definition hash.
+
+    Args:
+        session: Database session
+        definition_hash: Hash of chain definition
+        name: Optional chain name filter
+        status: Optional status filter (e.g., 'completed')
+        limit: Maximum results
+
+    Returns:
+        List of matching chains, newest first
+    """
+    query = session.query(Chain).filter(
+        Chain.definition_hash == definition_hash
+    )
+    if name:
+        query = query.filter(Chain.name == name)
+    if status:
+        query = query.filter(Chain.status == status)
+
+    return query.order_by(desc(Chain.version)).limit(limit).all()

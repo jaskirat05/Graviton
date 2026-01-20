@@ -7,8 +7,9 @@ Run this alongside the FastAPI gateway.
 
 import asyncio
 import sys
-import yaml
+import logging
 from pathlib import Path
+from datetime import datetime
 
 # Add parent to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -16,11 +17,31 @@ sys.path.append(str(Path(__file__).parent.parent))
 from temporalio.client import Client
 from temporalio.worker import Worker
 
-from temporal_gateway.workflows import ComfyUIWorkflow, ChainExecutorWorkflow
+
+def setup_worker_logging(log_dir: Path = None, log_level: str = "INFO"):
+    """Simple logging setup for worker (no Rich to avoid Temporal sandbox issues)"""
+    log_dir = Path(log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    log_file = log_dir / f"worker_{timestamp}.log"
+
+    # Configure root logger
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(log_file),
+        ]
+    )
+
+    return logging.getLogger("worker"), log_file
+
+from temporal_gateway.executors import ComfyUIWorkflow, ChainExecutorWorkflow
 from temporal_gateway.activities import (
     select_best_server,
     execute_and_track_workflow,
-    download_and_store_images,
     download_and_store_artifacts,
     create_execution_log,
     get_server_output_files,
@@ -34,44 +55,39 @@ from temporal_gateway.activities import (
     update_chain_status_activity,
     update_workflow_status_activity,
     get_workflow_artifacts,
+    publish_step_completed_activity,
     create_approval_request_activity,
+    upload_local_inputs,
 )
-from gateway.core import load_balancer
+from temporal_gateway.servers import ServerRegistry
 from temporal_gateway.database import init_db
+from temporal_gateway.config import get_servers
+from temporal_gateway.services.broadcast import connect_broadcast, disconnect_broadcast
 
 
 async def main():
     """Start the Temporal worker"""
 
+    # Setup logging (writes to logs/ directory)
+    log_dir = Path(__file__).parent / "logs"
+    logger, log_file = setup_worker_logging(log_dir=log_dir, log_level="INFO")
+
     # Initialize database
-    print("Initializing artifact database...")
+    logger.info("Initializing artifact database...")
     init_db()
-    print("✓ Database initialized\n")
+    logger.info("Database initialized")
 
-    # Load server configuration
-    config_path = Path(__file__).parent.parent / "config.yaml"
-    print(f"Loading server configuration from: {config_path}")
+    # Connect to Redis for broadcast events
+    logger.info("Connecting to Redis for event broadcasting...")
+    await connect_broadcast()
+    logger.info("Redis broadcast connected")
 
-    try:
-        with open(config_path) as f:
-            config = yaml.safe_load(f)
-
-        # Register all servers from config
-        servers = config.get('servers', [])
-        print(f"Found {len(servers)} server(s) in config")
-
-        for server in servers:
-            load_balancer.register_server(server['address'])
-            print(f"  ✓ Registered: {server['name']} ({server['address']})")
-
-        print()
-    except FileNotFoundError:
-        print(f"⚠ Config file not found: {config_path}")
-        print("  Create config.yaml with server definitions")
-        print()
-    except Exception as e:
-        print(f"⚠ Error loading config: {e}")
-        print()
+    # Initialize server registry
+    logger.info("Loading server registry...")
+    registry = ServerRegistry.get_instance()
+    logger.info(f"Registered {len(registry)} servers")
+    for server in registry.get_all_servers():
+        logger.info(f"  Server: {server.name} ({server.provider_type})")
 
     # Connect to Temporal Server
     # For local dev with CLI: localhost:7233
@@ -86,7 +102,6 @@ async def main():
         activities=[                     # Register activity functions
             select_best_server,
             execute_and_track_workflow,
-            download_and_store_images,
             download_and_store_artifacts,
             create_execution_log,
             get_server_output_files,
@@ -100,20 +115,22 @@ async def main():
             update_chain_status_activity,
             update_workflow_status_activity,
             get_workflow_artifacts,
+            publish_step_completed_activity,
             create_approval_request_activity,
+            upload_local_inputs,
         ]
     )
 
-    print("=" * 60)
-    print("Temporal Worker Started")
-    print("=" * 60)
-    print(f"Connected to: localhost:7233")
-    print(f"Task Queue: comfyui-gpu-farm")
-    print(f"Workflows: {[ComfyUIWorkflow.__name__, ChainExecutorWorkflow.__name__]}")
-    print(f"Activities: 9 registered")
-    print("=" * 60)
-    print("\nWorker is running. Press Ctrl+C to stop.")
-    print("Waiting for workflows to execute...\n")
+    logger.info("=" * 60)
+    logger.info("🔧 Temporal Worker Started")
+    logger.info("=" * 60)
+    logger.info("Connected to Temporal: localhost:7233")
+    logger.info("Task Queue: comfyui-gpu-farm")
+    logger.info(f"Workflows: {[ComfyUIWorkflow.__name__, ChainExecutorWorkflow.__name__]}")
+    if log_file:
+        logger.info(f"Log file: {log_file}")
+    logger.info("=" * 60)
+    logger.info("Worker is running. Press Ctrl+C to stop.")
 
     # Run worker (blocks until stopped)
     await worker.run()

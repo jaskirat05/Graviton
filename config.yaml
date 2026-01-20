@@ -1,16 +1,33 @@
-# ComfyUI Server Configuration
-# Both gateway and worker read from this file
+# ComfyAutomate Configuration
+# Gateway and worker read from this file
 
+# Storage configuration
+storage:
+  artifacts_dir: ./artifacts  # Where generated images/videos are stored
+
+# Redis for pub/sub notifications
+redis:
+  url: redis://localhost:6379
+
+# Gateway settings
+gateway:
+  url: http://localhost:8001  # Used for building approval URLs in notifications
+
+# ComfyUI servers
+# Supported providers: comfyui (default), runpod (future), vastai (future)
 servers:
-  - name: Procure-X Server
+  - name: procure-x
+    provider: comfyui
     address: procure-x.testmcp.org
-    description: External ComfyUI instance for testing
 
   # Add more servers here:
-  # - name: GPU Server 1
-  #   address: gpu1.example.com:8188
-  #   description: Local GPU server
+  # - name: gpu-server-1
+  #   provider: comfyui
+  #   address: gpu1.example.com
+  #   port: 8188
   #
-  # - name: GPU Server 2
-  #   address: gpu2.example.com:8188
-  #   description: Local GPU server
+  # Future: RunPod example
+  # - name: runpod-1
+  #   provider: runpod
+  #   pod_id: abc123
+  #   api_key: ${RUNPOD_API_KEY}

@@ -131,6 +131,7 @@ class ExecutionGraph:
     Attributes:
         chain_name: Name of the chain
         nodes: Dict mapping step_id to StepNode
+        inputs: Local files to upload {key: {"source": path, "target": filename}}
         chain_db_id: Database chain ID (once saved)
 
     Note:
@@ -139,6 +140,7 @@ class ExecutionGraph:
     """
     chain_name: str
     nodes: Dict[str, StepNode] = field(default_factory=dict)
+    inputs: Dict[str, Dict[str, Any]] = field(default_factory=dict)  # Values can be str or None
     chain_db_id: Optional[int] = None
 
     def __post_init__(self):
@@ -289,20 +291,27 @@ class ExecutionGraph:
             breakdown[node.status] = breakdown.get(node.status, 0) + 1
         return breakdown
 
-    def apply_cached_result(self, step_id: str, cached_result: 'StepResult'):
+    def apply_cached_result(self, step_id: str, cached_result):
         """
         Apply a cached result to a node
 
         Args:
             step_id: Step ID to apply cache to
-            cached_result: Cached result from database
+            cached_result: StepResult object or dict (Temporal deserializes to dict)
         """
         node = self.get_node(step_id)
         if node:
-            node.status = cached_result.status
-            node.artifact_id = cached_result.artifact_id
-            node.workflow_db_id = cached_result.workflow_db_id
-            node.server_address = cached_result.server_address
+            # Handle both StepResult objects and dicts
+            if isinstance(cached_result, dict):
+                node.status = cached_result.get("status", "completed")
+                node.artifact_id = cached_result.get("artifact_id")
+                node.workflow_db_id = cached_result.get("workflow_db_id")
+                node.server_address = cached_result.get("server_address")
+            else:
+                node.status = cached_result.status
+                node.artifact_id = cached_result.artifact_id
+                node.workflow_db_id = cached_result.workflow_db_id
+                node.server_address = cached_result.server_address
 
     def propagate_skip(self, step_id: str, reason: str = "dependency"):
         """

@@ -1,0 +1,49 @@
+2026-01-13 10:51:08,361 - temporal_gateway.logging_config - INFO - {'log_file': '/home/jaskirat/Documents/comfyautomate/temporal_gateway/logs/gateway_20260113_052108.log', 'level': 'info', 'event': 'Logging configured', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-13T05:21:08.361916Z'}
+2026-01-13 10:51:08,369 - temporal_gateway.registry - INFO - WorkflowRegistry initialized: /home/jaskirat/Documents/comfyautomate/templates
+2026-01-13 10:51:08,371 - temporal_gateway.registry - INFO - ✓ fluxdev: Loading from override file
+2026-01-13 10:51:08,372 - temporal_gateway.registry - INFO -   Loaded 13 parameters from override file
+2026-01-13 10:51:08,373 - temporal_gateway.registry - INFO - ✓ firstEndTovideo: Loading from override file
+2026-01-13 10:51:08,375 - temporal_gateway.registry - INFO -   Loaded 44 parameters from override file
+2026-01-13 10:51:08,377 - temporal_gateway.registry - INFO - ✓ image_qwen_edit: Loading from override file
+2026-01-13 10:51:08,379 - temporal_gateway.registry - INFO -   Loaded 27 parameters from override file
+2026-01-13 10:51:08,380 - temporal_gateway.registry - INFO - ✓ video_wan2_2_14B_fun_camera_test: Loading from override file
+2026-01-13 10:51:08,381 - temporal_gateway.registry - INFO -   Loaded 49 parameters from override file
+2026-01-13 10:51:08,383 - temporal_gateway.registry - INFO - ✓ qwen_image_edit: Loading from override file
+2026-01-13 10:51:08,384 - temporal_gateway.registry - INFO -   Loaded 25 parameters from override file
+2026-01-13 10:51:08,386 - temporal_gateway.registry - INFO - ✓ video_wan2_2_14B_i2v: Loading from override file
+2026-01-13 10:51:08,387 - temporal_gateway.registry - INFO -   Loaded 43 parameters from override file
+2026-01-13 10:51:08,388 - temporal_gateway.registry - INFO - ✓ imageSave: Loading from override file
+2026-01-13 10:51:08,390 - temporal_gateway.registry - INFO -   Loaded 9 parameters from override file
+2026-01-13 10:51:08,391 - temporal_gateway.registry - INFO - Discovery complete: 7 workflows, 0 generated, 7 loaded, 0 regenerated
+2026-01-13 10:51:08,393 - temporal_gateway.registry - INFO - ✓ fluxdev: Loading from override file
+2026-01-13 10:51:08,394 - temporal_gateway.registry - INFO -   Loaded 13 parameters from override file
+2026-01-13 10:51:08,396 - temporal_gateway.registry - INFO - ✓ firstEndTovideo: Loading from override file
+2026-01-13 10:51:08,397 - temporal_gateway.registry - INFO -   Loaded 44 parameters from override file
+2026-01-13 10:51:08,399 - temporal_gateway.registry - INFO - ✓ image_qwen_edit: Loading from override file
+2026-01-13 10:51:08,400 - temporal_gateway.registry - INFO -   Loaded 27 parameters from override file
+2026-01-13 10:51:08,402 - temporal_gateway.registry - INFO - ✓ video_wan2_2_14B_fun_camera_test: Loading from override file
+2026-01-13 10:51:08,404 - temporal_gateway.registry - INFO -   Loaded 49 parameters from override file
+2026-01-13 10:51:08,405 - temporal_gateway.registry - INFO - ✓ qwen_image_edit: Loading from override file
+2026-01-13 10:51:08,406 - temporal_gateway.registry - INFO -   Loaded 25 parameters from override file
+2026-01-13 10:51:08,408 - temporal_gateway.registry - INFO - ✓ video_wan2_2_14B_i2v: Loading from override file
+2026-01-13 10:51:08,409 - temporal_gateway.registry - INFO -   Loaded 43 parameters from override file
+2026-01-13 10:51:08,410 - temporal_gateway.registry - INFO - ✓ imageSave: Loading from override file
+2026-01-13 10:51:08,411 - temporal_gateway.registry - INFO -   Loaded 9 parameters from override file
+2026-01-13 10:51:08,413 - temporal_gateway.registry - INFO - Discovery complete: 7 workflows, 0 generated, 7 loaded, 0 regenerated
+2026-01-13 10:51:08,414 - temporal_gateway.clients.approval.routes - INFO - Approval service initialized with Temporal client
+2026-01-13 10:51:08,452 - temporal_gateway.services.broadcast - INFO - Created broadcast instance for redis://localhost:6379
+2026-01-13 10:51:08,455 - temporal_gateway.services.broadcast - INFO - Broadcast connected to Redis
+2026-01-13 10:51:08,456 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-13T05:21:08.456552Z'}
+2026-01-13 10:51:08,457 - temporal_gateway.logging_config - INFO - {'event': '🚀 Temporal Gateway Started', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-13T05:21:08.457817Z'}
+2026-01-13 10:51:08,459 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-13T05:21:08.459075Z'}
+2026-01-13 10:51:08,460 - temporal_gateway.logging_config - INFO - {'host': 'localhost:7233', 'event': 'Connected to Temporal', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-13T05:21:08.460626Z'}
+2026-01-13 10:51:08,461 - temporal_gateway.logging_config - INFO - {'url': 'http://localhost:8001', 'event': 'Gateway API', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-13T05:21:08.461932Z'}
+2026-01-13 10:51:08,463 - temporal_gateway.logging_config - INFO - {'url': 'http://localhost:8233', 'event': 'Temporal UI', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-13T05:21:08.463196Z'}
+2026-01-13 10:51:08,464 - temporal_gateway.logging_config - INFO - {'count': 7, 'event': 'Workflows discovered', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-13T05:21:08.464418Z'}
+2026-01-13 10:51:08,465 - temporal_gateway.logging_config - INFO - {'path': '/home/jaskirat/Documents/comfyautomate/temporal_gateway/logs/gateway_20260113_052108.log', 'event': 'Log file', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-13T05:21:08.465621Z'}
+2026-01-13 10:51:08,467 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-13T05:21:08.467074Z'}
+2026-01-13 10:51:21,771 - __main__ - INFO - {'event': 'SSE client subscribing to chain:1dc269df-cfd0-4593-8b1e-2efb50d23f4e', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-13T05:21:21.771956Z'}
+2026-01-13 10:51:21,776 - __main__ - INFO - {'event': 'Starting SSE subscription for chain:1dc269df-cfd0-4593-8b1e-2efb50d23f4e', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-13T05:21:21.776885Z'}
+2026-01-13 10:51:23,831 - __main__ - INFO - {'event': 'SSE sending event: approval_requested for chain:1dc269df-cfd0-4593-8b1e-2efb50d23f4e', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-13T05:21:23.831347Z'}
+2026-01-13 10:51:23,875 - __main__ - INFO - {'event': 'SSE sending event: approval_requested for chain:1dc269df-cfd0-4593-8b1e-2efb50d23f4e', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-13T05:21:23.875739Z'}
+2026-01-13 10:54:10,781 - temporal_gateway.services.broadcast - INFO - Broadcast disconnected from Redis

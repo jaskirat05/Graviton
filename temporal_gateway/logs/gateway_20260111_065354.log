@@ -1,0 +1,1 @@
+2026-01-11 12:23:54,006 - temporal_gateway.logging_config - INFO - {'log_file': '/home/jaskirat/Documents/comfyautomate/temporal_gateway/logs/gateway_20260111_065354.log', 'level': 'info', 'event': 'Logging configured', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-11T06:53:54.006542Z'}

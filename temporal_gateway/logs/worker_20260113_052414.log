@@ -1,0 +1,22 @@
+2026-01-13 10:54:14,573 - worker - INFO - Initializing artifact database...
+2026-01-13 10:54:14,574 - worker - INFO - Database initialized
+2026-01-13 10:54:14,574 - worker - INFO - Connecting to Redis for event broadcasting...
+2026-01-13 10:54:14,610 - temporal_gateway.services.broadcast - INFO - Created broadcast instance for redis://localhost:6379
+2026-01-13 10:54:14,613 - temporal_gateway.services.broadcast - INFO - Broadcast connected to Redis
+2026-01-13 10:54:14,613 - worker - INFO - Redis broadcast connected
+2026-01-13 10:54:14,613 - worker - INFO - Loading server registry...
+2026-01-13 10:54:14,613 - temporal_gateway.servers.registry - INFO - Registered server: procure-x (comfyui)
+2026-01-13 10:54:14,613 - temporal_gateway.servers.registry - INFO - Loaded 1 servers from config
+2026-01-13 10:54:14,613 - worker - INFO - Registered 1 servers
+2026-01-13 10:54:14,613 - worker - INFO -   Server: procure-x (comfyui)
+2026-01-13 10:54:14,738 - worker - INFO - ============================================================
+2026-01-13 10:54:14,739 - worker - INFO - 🔧 Temporal Worker Started
+2026-01-13 10:54:14,739 - worker - INFO - ============================================================
+2026-01-13 10:54:14,739 - worker - INFO - Connected to Temporal: localhost:7233
+2026-01-13 10:54:14,739 - worker - INFO - Task Queue: comfyui-gpu-farm
+2026-01-13 10:54:14,739 - worker - INFO - Workflows: ['ComfyUIWorkflow', 'ChainExecutorWorkflow']
+2026-01-13 10:54:14,739 - worker - INFO - Log file: /home/jaskirat/Documents/comfyautomate/temporal_gateway/logs/worker_20260113_052414.log
+2026-01-13 10:54:14,739 - worker - INFO - ============================================================
+2026-01-13 10:54:14,739 - worker - INFO - Worker is running. Press Ctrl+C to stop.
+2026-01-13 11:01:10,773 - temporalio.worker._worker - INFO - Worker cancelled, shutting down
+2026-01-13 11:01:10,774 - temporalio.worker._worker - INFO - Beginning worker shutdown, will wait 0:00:00 before cancelling activities

@@ -81,21 +81,14 @@ Each line in the log file is a JSON object with these fields:
 
 ### Basic Usage
 
-```python
-from sdk import ComfyUISDK
-import json
+```bash
+# Execute a chain - logging happens automatically
+curl -X POST http://localhost:8001/chains/my_chain/execute \
+  -H "Content-Type: application/json" \
+  -d '{"initial_parameters": {}}'
 
-sdk = ComfyUISDK(gateway_url="http://localhost:8000")
-
-# Load workflow
-with open('workflow.json') as f:
-    workflow = json.load(f)
-
-# Execute - logging happens automatically
-result = sdk.execute_workflow(workflow)
-
-# Access log file path
-print(f"Log file: {result['log_file_path']}")
+# Get result with log path
+curl http://localhost:8001/chains/result/{workflow_id}
 ```
 
 ### Retrieve Logs via API
@@ -118,7 +111,7 @@ for entry in log_data['log_entries']:
 ### Analyze Logs with PromptLogReader
 
 ```python
-from gateway.observability import PromptLogReader
+from temporal_gateway.observability import PromptLogReader
 from pathlib import Path
 
 # Read log file
@@ -143,7 +136,7 @@ for event in reader.get_execution_timeline():
 ### Find Failed Workflows
 
 ```python
-from gateway.observability import find_failed_prompts
+from temporal_gateway.observability import find_failed_prompts
 
 # Find all failed executions
 failed = find_failed_prompts()
@@ -241,7 +234,7 @@ The logging system is designed for automated debugging:
 Example debug agent workflow:
 
 ```python
-from gateway.observability import PromptLogReader, find_failed_prompts
+from temporal_gateway.observability import PromptLogReader, find_failed_prompts
 
 # Find recent failures
 failed = find_failed_prompts()

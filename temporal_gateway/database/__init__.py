@@ -10,7 +10,7 @@ from .crud import (
     # Chain
     create_chain,
     get_chain,
-    get_chain_by_temporal_id,
+    get_chain_by_job_id,
     update_chain_status,
     list_chains,
     delete_chain,
@@ -58,7 +58,7 @@ __all__ = [
     # Chain CRUD
     "create_chain",
     "get_chain",
-    "get_chain_by_temporal_id",
+    "get_chain_by_job_id",
     "update_chain_status",
     "list_chains",
     "delete_chain",

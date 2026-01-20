@@ -5,9 +5,7 @@ Activities perform the actual work that interacts with external systems.
 They can fail and will be automatically retried by Temporal.
 """
 
-from .select_server import select_best_server
-from .download_artifacts import download_and_store_images
-from .download_artifacts_db import download_and_store_artifacts
+from .download_artifacts import download_and_store_artifacts
 from .execution_log import create_execution_log
 from .server_outputs import get_server_output_files
 from .chain_templates import resolve_chain_templates
@@ -21,6 +19,7 @@ from .database_operations import (
     update_chain_status_activity,
     update_workflow_status_activity,
     get_workflow_artifacts,
+    publish_step_completed_activity,
 )
 from .approval_operations import create_approval_request_activity
 from .cache_operations import (
@@ -28,10 +27,11 @@ from .cache_operations import (
     get_next_chain_version,
     get_chain_by_name_version,
 )
+from .upload_inputs import upload_local_inputs
+from .select_server import select_best_server
 
 __all__ = [
     "select_best_server",
-    "download_and_store_images",
     "download_and_store_artifacts",
     "create_execution_log",
     "get_server_output_files",
@@ -46,8 +46,10 @@ __all__ = [
     "update_chain_status_activity",
     "update_workflow_status_activity",
     "get_workflow_artifacts",
+    "publish_step_completed_activity",
     "create_approval_request_activity",
     "build_cache_from_database",
     "get_next_chain_version",
     "get_chain_by_name_version",
+    "upload_local_inputs",
 ]

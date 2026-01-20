@@ -1,18 +1,38 @@
 """
-Chain Execution Test - Manual Regeneration from Specific Step
+Chain Execution Test - Flux Dev to Qwen Image Edit Pipeline
 
-Tests the regeneration workflow from a specific step with caching.
+Interactive test with approval flow - shows artifact URLs and allows approve/reject.
 """
 
 import asyncio
 import httpx
 import json
 import time
+import yaml
+from pathlib import Path
 from typing import Optional
 
 
 BASE_URL = "http://localhost:8001"
-CHAIN_NAME = "image-edit-to-video-pipeline"
+CHAIN_NAME = "flux-to-qwen-edit"
+CHAINS_DIR = Path(__file__).parent / "chains"
+
+
+def load_chain_definition(chain_name: str) -> dict:
+    """Load chain definition YAML file"""
+    chain_file = CHAINS_DIR / f"{chain_name}.yaml"
+    if not chain_file.exists():
+        raise FileNotFoundError(f"Chain definition not found: {chain_file}")
+    with open(chain_file) as f:
+        return yaml.safe_load(f)
+
+
+def get_step_parameters(chain_def: dict, step_id: str) -> dict:
+    """Get parameters for a specific step from chain definition"""
+    for step in chain_def.get('steps', []):
+        if step.get('id') == step_id:
+            return step.get('parameters', {})
+    return {}
 
 
 async def wait_for_approval(client: httpx.AsyncClient, timeout: int = 300) -> Optional[dict]:
@@ -53,6 +73,114 @@ async def reject_request(client: httpx.AsyncClient, token: str, new_parameters: 
     return response
 
 
+def prompt_for_parameters(step_id: str, current_params: dict) -> dict:
+    """Interactively prompt user to override parameters"""
+    print(f"\n   Current parameters for step '{step_id}':")
+    print("   " + "-" * 50)
+
+    param_list = list(current_params.items())
+    for i, (key, value) in enumerate(param_list):
+        print(f"   [{i}] {key}: {value}")
+
+    print("\n   Enter parameter overrides (empty line to finish):")
+    print("   Format: <number or key> = <new_value>")
+    print("   Example: 0 = new prompt text")
+    print("            6.text = My new prompt")
+
+    new_params = {}
+    while True:
+        try:
+            user_input = input("   > ").strip()
+        except EOFError:
+            break
+
+        if not user_input:
+            break
+
+        if "=" not in user_input:
+            print("   Invalid format. Use: <key> = <value>")
+            continue
+
+        key_part, value_part = user_input.split("=", 1)
+        key_part = key_part.strip()
+        value_part = value_part.strip()
+
+        # Handle numeric index
+        if key_part.isdigit():
+            idx = int(key_part)
+            if 0 <= idx < len(param_list):
+                key_part = param_list[idx][0]
+            else:
+                print(f"   Invalid index. Use 0-{len(param_list)-1}")
+                continue
+
+        # Try to parse value as JSON, otherwise keep as string
+        try:
+            parsed_value = json.loads(value_part)
+        except json.JSONDecodeError:
+            parsed_value = value_part
+
+        new_params[key_part] = parsed_value
+        print(f"   Set {key_part} = {parsed_value}")
+
+    return new_params
+
+
+async def interactive_approval(client: httpx.AsyncClient, approval: dict, chain_def: dict) -> bool:
+    """Handle approval interactively - returns True if approved, False if rejected"""
+    token = approval['approval_link_token']
+    step_id = approval.get('step_id', 'unknown')
+    artifact_url = approval.get('artifact_view_url', 'No URL available')
+
+    print(f"\n   {'=' * 60}")
+    print(f"   APPROVAL REQUEST: {step_id}")
+    print(f"   {'=' * 60}")
+    print(f"   Artifact URL: {artifact_url}")
+    print(f"   Step ID: {step_id}")
+    print(f"   Chain: {approval.get('chain_name', 'unknown')}")
+    print(f"   {'=' * 60}")
+
+    while True:
+        try:
+            choice = input("\n   Approve this step? (y/n): ").strip().lower()
+        except EOFError:
+            choice = 'y'
+
+        if choice in ('y', 'yes'):
+            response = await approve_request(client, token)
+            if response.status_code == 200:
+                print(f"   ✅ Step '{step_id}' APPROVED")
+                return True
+            else:
+                print(f"   ❌ Approval failed: {response.status_code} - {response.text}")
+                return False
+
+        elif choice in ('n', 'no'):
+            # Get current parameters from chain definition
+            current_params = get_step_parameters(chain_def, step_id)
+            if not current_params:
+                print(f"   No parameters found for step '{step_id}' in chain definition")
+                current_params = {}
+
+            new_params = prompt_for_parameters(step_id, current_params)
+
+            if not new_params:
+                print("   No parameters changed. Please provide at least one parameter override.")
+                continue
+
+            comment = input("   Rejection comment (optional): ").strip()
+
+            response = await reject_request(client, token, new_params, comment=comment)
+            if response.status_code == 200:
+                print(f"   🔄 Step '{step_id}' REJECTED - will regenerate with new parameters")
+                return False
+            else:
+                print(f"   ❌ Rejection failed: {response.status_code} - {response.text}")
+                return False
+        else:
+            print("   Please enter 'y' or 'n'")
+
+
 async def monitor_chain_completion(client: httpx.AsyncClient, workflow_id: str, timeout: int = 1800):
     """Monitor chain until completion or timeout (30 minutes default)"""
     start_time = time.time()
@@ -78,114 +206,81 @@ async def monitor_chain_completion(client: httpx.AsyncClient, workflow_id: str, 
 
 
 # ============================================================================
-# TEST: Manual Regeneration from Specific Step
+# TEST: Flux Dev to Qwen Image Edit Chain Execution
 # ============================================================================
 
-async def test_manual_regeneration():
+async def test_flux_to_qwen_chain():
     """
-    Test manual regeneration from a specific step with approval rejection
+    Interactive test for Flux Dev to Qwen Image Edit chain execution
 
     This test:
-    - Uses most recent completed chain (chain_id: 2de2673d-1960-4b3a-a456-835a09eb533d)
-    - All steps completed: extract_frame1, extract_frame2, edit_frame1, edit_frame2, create_video
-    - Manually triggers regeneration from edit_frame1 with new parameters
-    - Rejects first approval (edit_frame1) with different prompt
-    - Approves regenerated edit_frame1 (in-step regeneration)
-    - Approves remaining steps (edit_frame2, create_video)
-
-    Expected:
-    - Cache: extract_frame1 (ComfyUI_00184_.png), extract_frame2 (ComfyUI_00185_.png)
-    - Regenerate: edit_frame1 (twice - rejected then approved), edit_frame2, create_video
+    - Executes the flux-to-qwen-edit chain
+    - Step 1: generate_image (Flux Dev) - generates base image
+    - Step 2: qwen_edit - edits generated image with local reference image
+    - Shows artifact URLs for each approval step
+    - Allows user to approve (y) or reject (n) with parameter overrides
     """
 
     print("\n" + "=" * 70)
-    print("TEST: REGENERATION WITH APPROVAL REJECTION")
+    print("INTERACTIVE TEST: FLUX DEV TO QWEN IMAGE EDIT CHAIN")
     print("=" * 70)
 
+    # Load chain definition for parameter reference
+    print("\n1. Loading chain definition...")
+    try:
+        chain_def = load_chain_definition(CHAIN_NAME)
+        print(f"   ✓ Chain definition loaded: {chain_def.get('name', CHAIN_NAME)}")
+    except FileNotFoundError as e:
+        print(f"   ❌ {e}")
+        return False
+
     async with httpx.AsyncClient(timeout=1800.0) as client:
-        print("\n1. Using most recent completed chain for regeneration...")
-        print("   Chain ID: 2de2673d-1960-4b3a-a456-835a09eb533d")
-        print("   ✓ All 5 steps completed successfully")
-
-        # Manually regenerate from edit_frame1 with parameters for multiple steps
-        print("\n2. Manually regenerating from edit_frame1 with new parameters...")
-        regenerate_payload = {
-            "from_step": "edit_frame1",
-            "new_parameters": {
-                "edit_frame1": {
-                    "111.prompt": "Transform the scene into a cyberpunk style with neon lights"
-                },
-                "edit_frame2": {
-                    "111.prompt": "Make the scene more vibrant with enhanced neon colors"
-                },
-                "create_video": {
-                    "6.text": "Smooth cinematic transition with cyberpunk aesthetics",
-                    "60.fps": 16
-                }
-            }
-        }
-
+        # Start chain execution
+        print("\n2. Starting chain execution...")
         response = await client.post(
-            f"{BASE_URL}/chains/{CHAIN_NAME}/regenerate",
-            json=regenerate_payload
+            f"{BASE_URL}/chains/{CHAIN_NAME}/execute",
+            json={"parameters": {}}
         )
 
         if response.status_code != 200:
-            print(f"   ❌ Regeneration failed: {response.status_code} - {response.text}")
+            print(f"   ❌ Chain start failed: {response.status_code} - {response.text}")
             return False
 
-        regen_result = response.json()
-        workflow_id = regen_result['workflow_id']
-        print(f"   ✓ Regeneration started: {workflow_id}")
-        print(f"   Regenerating from: {regen_result['regeneration_from_step']}")
-        print(f"   Updated parameters for: {', '.join(regenerate_payload['new_parameters'].keys())}")
+        exec_result = response.json()
+        workflow_id = exec_result['workflow_id']
+        print(f"   ✓ Chain started: {workflow_id}")
+        print(f"   Chain name: {exec_result['chain_name']}")
+        print(f"   Total steps: {exec_result['total_steps']}")
 
-        # Handle approvals with rejection for first edit_frame1
-        print("\n3. Handling approvals (reject first edit_frame1, approve rest)...")
+        # Handle approvals interactively
+        print("\n3. Interactive approval flow...")
         approved_count = 0
         rejected_count = 0
-        edit_frame1_seen = False
 
-        for i in range(10):  # Safety limit (increased for retry)
+        for i in range(10):  # Safety limit (allow for regenerations)
             approval = await wait_for_approval(client, timeout=600)
             if not approval:
+                print("   No more approvals pending")
                 break
 
-            token = approval['approval_link_token']
-            step_id = approval.get('step_id', 'unknown')
-
-            # Reject first edit_frame1, approve everything else
-            if step_id == 'edit_frame1' and not edit_frame1_seen:
-                edit_frame1_seen = True
-                print(f"   🔄 Rejecting step: {step_id} (first attempt)")
-                await reject_request(
-                    client,
-                    token,
-                    new_parameters={
-                        "111.prompt": "Transform into a futuristic sci-fi scene with holographic elements and glowing accents"
-                    },
-                    comment="Need more futuristic holographic elements"
-                )
-                rejected_count += 1
-                print(f"      → Waiting for regenerated {step_id}...")
-            else:
-                print(f"   ✅ Approving step: {step_id}")
-                await approve_request(client, token)
+            was_approved = await interactive_approval(client, approval, chain_def)
+            if was_approved:
                 approved_count += 1
+            else:
+                rejected_count += 1
 
-        print(f"   ✓ Rejected {rejected_count} approval(s)")
-        print(f"   ✓ Approved {approved_count} approval(s) (including regenerated)")
+        print(f"\n   Summary: {approved_count} approved, {rejected_count} rejected")
 
-        # Wait for regenerated chain completion
-        print("\n4. Waiting for regenerated chain completion...")
+        # Wait for chain completion
+        print("\n4. Waiting for chain completion...")
         final_status = await monitor_chain_completion(client, workflow_id)
 
         if not final_status:
-            print("   ❌ Regenerated chain did not complete in time")
+            print("   ❌ Chain did not complete in time")
             return False
 
         # Get final result
-        print("\n5. Getting regenerated chain result...")
+        print("\n5. Getting chain result...")
         response = await client.get(f"{BASE_URL}/chains/result/{workflow_id}")
         if response.status_code != 200:
             print(f"   ❌ ERROR: {response.status_code}")
@@ -195,17 +290,17 @@ async def test_manual_regeneration():
         print(f"   Status: {result['status']}")
         print(f"   Successful Steps: {result['successful_steps']}")
 
-        # Verify cached steps vs regenerated steps
+        # Verify execution
         print("\n6. Verifying execution flow...")
-        print(f"   Expected cached: extract_frame1, extract_frame2")
-        print(f"   Expected regenerated: edit_frame1 (2x - rejected + approved), edit_frame2, create_video")
+        print(f"   Steps: generate_image → qwen_edit")
+        print(f"   Local input: reference_image (uploaded to ComfyUI)")
         print(f"\n   Final step statuses:")
 
         for step_id, step_result in result['step_results'].items():
-            approval_info = ""
-            if step_result.get('approval_decision'):
-                approval_info = f" (approval: {step_result['approval_decision']})"
-            print(f"   {step_id}: {step_result['status']}{approval_info}")
+            status = step_result.get('status', 'unknown')
+            output = step_result.get('output', {})
+            output_info = f" → {output.get('image', 'no output')}" if output else ""
+            print(f"   {step_id}: {status}{output_info}")
 
         success = result['status'] == 'completed'
         print(f"\n   {'✓ TEST PASSED' if success else '❌ TEST FAILED'}")
@@ -217,17 +312,18 @@ async def test_manual_regeneration():
 # ============================================================================
 
 async def run_test():
-    """Run the manual regeneration test"""
+    """Run the interactive Flux to Qwen chain test"""
 
     print("\n" + "=" * 70)
-    print("CHAIN REGENERATION TEST")
+    print("INTERACTIVE CHAIN EXECUTION TEST")
     print("=" * 70)
     print(f"Chain: {CHAIN_NAME}")
     print(f"Base URL: {BASE_URL}")
+    print("Mode: Interactive (approve/reject with parameter overrides)")
     print("=" * 70)
 
     try:
-        success = await test_manual_regeneration()
+        success = await test_flux_to_qwen_chain()
 
         print("\n" + "=" * 70)
         print("TEST RESULT")

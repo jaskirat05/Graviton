@@ -4,28 +4,29 @@ Chain System
 Provides tools for defining, validating, and executing workflow chains.
 
 Usage:
-    from temporal_gateway.chains import load_chain, create_execution_graph, ChainEngine
-    from temporal_gateway.workflows import ChainExecutorWorkflow
+    from temporal_gateway.chains import load_chain_from_dict, create_execution_graph, ChainEngine
     from temporalio.client import Client
 
-    # Load chain definition
-    chain = load_chain("chains/video_pipeline.yaml")
+    # Define chain at runtime
+    chain_def = {
+        "name": "my_chain",
+        "steps": [
+            {"id": "step1", "workflow": "generate_image", "parameters": {...}}
+        ]
+    }
 
-    # Create execution graph
+    # Load and create execution graph
+    chain = load_chain_from_dict(chain_def)
     graph = create_execution_graph(chain)
-
-    # Inspect parallel groups
-    groups = graph.get_level_groups()
-    print(f"Parallel execution groups: {groups}")
 
     # Execute via Chain Engine
     temporal_client = await Client.connect("localhost:7233")
     engine = ChainEngine(temporal_client)
-    workflow_id = await engine.execute_chain(graph)
-    print(f"Chain started: {workflow_id}")
+    chain_id = await engine.execute_chain(graph)
+    print(f"Chain started: {chain_id}")
 """
 
-# Import all models from models/ package
+# Models
 from .models import (
     ChainDefinition,
     ChainStepDefinition,
@@ -35,22 +36,23 @@ from .models import (
     StepNode,
 )
 
-from .interpreter import (
-    ChainInterpreter,
-    ChainValidationError,
-    TemplateResolutionError
-)
-
+# Service functions (includes exceptions)
 from .service import (
     load_chain,
     load_chain_from_dict,
     create_execution_graph,
     validate_chain,
     discover_chains,
+    resolve_templates,
     resolve_step_parameters,
-    evaluate_step_condition
+    evaluate_condition,
+    evaluate_step_condition,
+    build_execution_context,
+    ChainValidationError,
+    TemplateResolutionError,
 )
 
+# Engine
 from .engine import ChainEngine
 
 __all__ = [
@@ -62,19 +64,21 @@ __all__ = [
     "ExecutionGraph",
     "StepNode",
 
-    # Interpreter
-    "ChainInterpreter",
-    "ChainValidationError",
-    "TemplateResolutionError",
-
     # Service functions
     "load_chain",
     "load_chain_from_dict",
     "create_execution_graph",
     "validate_chain",
     "discover_chains",
+    "resolve_templates",
     "resolve_step_parameters",
+    "evaluate_condition",
     "evaluate_step_condition",
+    "build_execution_context",
+
+    # Exceptions
+    "ChainValidationError",
+    "TemplateResolutionError",
 
     # Engine
     "ChainEngine",

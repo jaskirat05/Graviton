@@ -7,16 +7,18 @@ from temporalio import activity
 
 from ..database import get_session
 from ..database.crud.approval import create_approval_request
+from ..services.broadcast import publish_chain_event
+from ..config import get_gateway_url
 
 
 @activity.defn
 async def create_approval_request_activity(
     artifact_id: str,
-    temporal_workflow_id: str,
+    job_id: str,
     artifact_view_url: str,
     chain_id: Optional[str] = None,
     step_id: Optional[str] = None,
-    temporal_run_id: Optional[str] = None,
+    job_run_id: Optional[str] = None,
     link_expiration_hours: Optional[int] = None,
     workflow_name: Optional[str] = None,
     server: Optional[str] = None,
@@ -28,11 +30,11 @@ async def create_approval_request_activity(
 
     Args:
         artifact_id: ID of artifact to approve
-        temporal_workflow_id: Temporal workflow ID to signal when decision made
+        job_id: Job ID to signal when decision made
         artifact_view_url: URL where approvers can view the artifact
         chain_id: Optional chain context
         step_id: Optional step identifier in chain
-        temporal_run_id: Optional Temporal run ID
+        job_run_id: Optional job run ID
         link_expiration_hours: Optional hours until approval link expires
         workflow_name: Name of workflow that generated the artifact
         server: Server address where workflow was executed
@@ -59,11 +61,11 @@ async def create_approval_request_activity(
             approval_request = create_approval_request(
                 session=session,
                 artifact_id=artifact_id,
-                temporal_workflow_id=temporal_workflow_id,
+                job_id=job_id,
                 artifact_view_url=artifact_view_url,
                 chain_id=chain_id,
                 step_id=step_id,
-                temporal_run_id=temporal_run_id,
+                job_run_id=job_run_id,
                 link_expiration_hours=link_expiration_hours,
                 config_metadata=config_metadata,
             )
@@ -72,6 +74,24 @@ async def create_approval_request_activity(
                 f"✓ Created approval request: {approval_request.id}, "
                 f"token: {approval_request.approval_link_token[:16]}..."
             )
+
+            # Publish event to Redis for SSE subscribers
+            if chain_id:
+                gateway_url = get_gateway_url()
+                await publish_chain_event(
+                    chain_id=chain_id,
+                    event={
+                        "type": "approval_requested",
+                        "chain_id": chain_id,
+                        "step_id": step_id,
+                        "token": approval_request.approval_link_token,
+                        "artifact_id": artifact_id,
+                        "workflow": workflow_name,
+                        "approval_url": f"{gateway_url}/approval/{approval_request.approval_link_token}",
+                        "artifact_url": f"{gateway_url}/artifacts/{artifact_id}",
+                    }
+                )
+                activity.logger.info(f"Published approval_requested event for chain {chain_id}")
 
             return {
                 "id": approval_request.id,

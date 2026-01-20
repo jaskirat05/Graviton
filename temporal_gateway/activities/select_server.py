@@ -1,43 +1,47 @@
 """
-Activity: Select best available ComfyUI server
-"""
+Activity: Select best available server
 
-import sys
-from pathlib import Path
+Uses the server registry and load balancer to select
+the best available ComfyUI server based on queue depth.
+"""
 
 from temporalio import activity
 
-# Add parent to path
-sys.path.append(str(Path(__file__).parent.parent.parent))
-
-from gateway.core import load_balancer
+from ..servers import ServerRegistry, LoadBalancer
+from ..servers.load_balancer import NoServersAvailableError
 
 
 @activity.defn
-async def select_best_server(strategy: str) -> str:
+async def select_best_server(strategy: str = "least_queue") -> str:
     """
-    Activity: Select the best available ComfyUI server
+    Activity: Select the best available server.
+
+    Uses real-time queue depth from servers to select the one
+    with the shortest queue.
 
     Args:
-        strategy: Selection strategy ("least_loaded", "round_robin", "random")
+        strategy: Selection strategy (currently only 'least_queue' supported)
 
     Returns:
-        Server address with http:// prefix (e.g., "http://procure-x.testmcp.org")
+        Server HTTP URL (e.g., "http://localhost:8188")
 
     Raises:
         Exception: If no servers are available
     """
     activity.logger.info(f"Selecting server with strategy: {strategy}")
 
-    # Use existing load balancer
-    server_address = load_balancer.get_best_server(strategy=strategy)
+    registry = ServerRegistry.get_instance()
+    load_balancer = LoadBalancer(registry)
 
-    if not server_address:
-        raise Exception("No available ComfyUI servers")
+    try:
+        server_info = await load_balancer.select_server()
 
-    # Ensure server address has http:// prefix for new client
-    if not server_address.startswith(('http://', 'https://')):
-        server_address = f"http://{server_address}"
+        activity.logger.info(
+            f"Selected server: {server_info.name} ({server_info.http_url})"
+        )
 
-    activity.logger.info(f"Selected server: {server_address}")
-    return server_address
+        return server_info.http_url
+
+    except NoServersAvailableError as e:
+        activity.logger.error(f"No servers available: {e}")
+        raise Exception(f"No servers available: {e}")

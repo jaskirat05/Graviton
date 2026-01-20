@@ -25,11 +25,10 @@ async def evaluate_chain_condition(
     activity.logger.info(f"Evaluating condition: {condition}")
 
     try:
-        from temporal_gateway.chains.interpreter import ChainInterpreter
+        from temporal_gateway.chains.service import build_execution_context, evaluate_condition
 
-        interpreter = ChainInterpreter()
-        context = interpreter.build_execution_context(step_results)
-        result = interpreter.evaluate_condition(condition, context)
+        context = build_execution_context(step_results)
+        result = evaluate_condition(condition, context)
 
         activity.logger.info(f"Condition evaluated to: {result}")
         return result

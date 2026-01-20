@@ -1,37 +1,38 @@
 # ComfyAutomate
 
-A clean, modular system for automating ComfyUI workflows with load balancing and observability.
+A clean, modular system for automating ComfyUI workflows with load balancing, chain execution, and observability.
 
 ## Project Structure
 
 ```
 comfyautomate/
-├── sdk/                    # Client SDK for end users
-│   └── client.py          # ComfyUISDK class
-│
-├── gateway/               # FastAPI backend service
+├── temporal_gateway/      # FastAPI gateway with Temporal orchestration
 │   ├── main.py           # App entry point
-│   ├── api/              # API route handlers
-│   │   ├── workflow.py   # Workflow execution endpoints
-│   │   └── servers.py    # Server management endpoints
+│   ├── worker.py         # Temporal worker
+│   ├── registry.py       # Workflow template registry
+│   ├── executors/        # Temporal workflow definitions
+│   │   ├── comfy_executor.py    # Single workflow executor
+│   │   └── chain_executor.py    # Chain orchestrator
+│   ├── activities/       # Temporal activities
+│   ├── chains/           # Chain system (DAG execution)
+│   │   ├── models/       # Data models (ExecutionGraph, StepNode)
+│   │   ├── interpreter.py # YAML parser & template resolver
+│   │   ├── engine.py     # Execution interface
+│   │   └── service.py    # Chain loading utilities
+│   ├── clients/          # External service clients
+│   │   ├── comfy/        # ComfyUI HTTP client
+│   │   └── approval/     # Approval API routes
 │   ├── core/             # Core business logic
-│   │   ├── comfyui_client.py  # Low-level ComfyUI client
 │   │   ├── load_balancer.py   # Server selection
-│   │   ├── storage.py         # Image storage
-│   │   └── logs/              # Generated log files
-│   │       └── prompts/       # Per-prompt JSONL logs
-│   ├── observability/    # Logging & monitoring
-│   │   ├── history_logger.py  # Automatic log creation
-│   │   ├── prompt_logger.py   # Manual logging (legacy)
-│   │   └── log_reader.py      # Log analysis & parsing
-│   └── models/           # Pydantic schemas
-│       ├── requests.py
-│       └── responses.py
+│   │   └── storage.py         # Image storage
+│   ├── database/         # SQLAlchemy models
+│   └── observability/    # Logging & monitoring
 │
-├── tests/                # Test scripts
-├── docs/                 # Documentation
-├── examples/             # Usage examples
-└── workflows/            # Example workflow JSONs
+├── templates/            # ComfyUI workflow JSON templates
+├── chains/              # Chain YAML definitions
+├── tests/               # Test scripts
+├── docs/                # Documentation
+└── config.yaml          # Server configuration
 ```
 
 ## Quick Start
@@ -42,93 +43,90 @@ comfyautomate/
 uv sync
 ```
 
-### 2. Start the Gateway
+### 2. Start Services
 
 ```bash
-source .venv/bin/activate
-uv run run_gateway.py
+# Start Temporal server
+temporal server start-dev
+
+# Start Temporal worker
+python temporal_gateway/worker.py
+
+# Start Temporal gateway (port 8001)
+python temporal_gateway/main.py
 ```
 
-### 3. Use the SDK
+### 3. Execute Workflows via Chains
 
-```python
-from sdk import ComfyUISDK
-import json
+All workflow execution is done through chains (even single workflows are single-step chains):
 
-# Initialize SDK
-sdk = ComfyUISDK(gateway_url="http://localhost:8000")
+```bash
+# List available chains
+curl http://localhost:8001/chains
 
-# Register a ComfyUI server
-sdk.register_server(
-    name="My Server",
-    address="127.0.0.1:8188"
-)
+# Execute a chain
+curl -X POST http://localhost:8001/chains/my_chain/execute \
+  -H "Content-Type: application/json" \
+  -d '{"parameters": {"prompt": "A dragon flying"}}'
 
-# Execute a workflow (automatic logging included!)
-with open('workflows/my_workflow.json') as f:
-    workflow = json.load(f)
+# Check status
+curl http://localhost:8001/chains/status/{workflow_id}
 
-result = sdk.execute_workflow(workflow)
-print(f"Images: {result['images']}")
-print(f"Log: {result['log_file_path']}")  # Automatic log file
+# Get result
+curl http://localhost:8001/chains/result/{workflow_id}
 ```
+
+Temporal UI available at: `http://localhost:8233`
 
 ## Features
 
-- **Load Balancing** - Automatically selects the best available server based on queue load
-- **Image Storage** - Downloads and serves generated images via URLs
-- **Automatic Logging** - Every workflow execution is logged automatically (JSONL format)
-- **Sync & Async Modes** - Block for results or poll asynchronously
-- **Clean Architecture** - Modular design with clear separation of concerns
+- **Durable Execution** - Workflows survive crashes via Temporal
+- **Chain Execution** - Multi-step pipelines with DAG dependencies
+- **Approval Workflows** - Human-in-the-loop with regeneration support
+- **Load Balancing** - Automatically selects the best available GPU server
+- **Automatic Logging** - Every execution is logged (JSONL format)
 
-## Automatic Logging
+## Chain System
 
-Every workflow execution is automatically logged without any manual setup:
+Chains define multi-step workflows as YAML:
 
-```python
-# Logs are created automatically
-result = sdk.execute_workflow(workflow)
+```yaml
+name: image-to-video
+description: Generate image then convert to video
+steps:
+  - id: generate_image
+    workflow: text_to_image
+    parameters:
+      prompt: "{{ prompt }}"
 
-# Access log file path
-print(result['log_file_path'])
-# Output: gateway/core/logs/prompts/20250124_123456_abc123.jsonl
-
-# Retrieve logs via API
-import requests
-logs = requests.get(f"http://localhost:8000/workflow/logs/{result['job_id']}").json()
-print(f"Total events: {logs['entry_count']}")
+  - id: create_video
+    workflow: image_to_video
+    depends_on: [generate_image]
+    parameters:
+      input_image: "{{ generate_image.output.image }}"
 ```
 
-Logs contain:
-- Workflow definition
-- Execution timeline
-- Node outputs
-- Error details (if any)
-- ComfyUI history data
-
-Perfect for debugging failed workflows! See [Logging Guide](docs/LOGGING.md) for details.
+Features:
+- Jinja2 templates for passing outputs between steps
+- Parallel execution of independent steps
+- Conditional step execution
+- Approval gates with regeneration
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) - System design and data flows
 - [Logging Guide](docs/LOGGING.md) - Automatic logging explained
-- [API Reference](docs/ComfyUI_API_Documentation.md) - Complete API docs
+- [Edge Cases](temporal_gateway/chains/EDGE_CASES.md) - Chain execution edge cases
 
 ## Development
 
 ```bash
-# Start gateway
-uv run run_gateway.py
-
 # Run tests
-python tests/test_sync_async_execution.py
+python test_chain_execution.py
 
 # Check server health
-curl http://localhost:8000/servers/health
+curl http://localhost:8001/health
 
-# View logs
-ls gateway/core/logs/prompts/
-
-# View images
-ls gateway/core/generated_images/
+# View Temporal UI
+open http://localhost:8233
 ```

@@ -1,0 +1,69 @@
+2026-01-15 00:24:13,245 - temporal_gateway.logging_config - INFO - {'log_file': '/home/jaskirat/Documents/comfyautomate/temporal_gateway/logs/gateway_20260114_185413.log', 'level': 'info', 'event': 'Logging configured', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-14T18:54:13.245718Z'}
+2026-01-15 00:24:13,252 - temporal_gateway.registry - INFO - WorkflowRegistry initialized: /home/jaskirat/Documents/comfyautomate/templates
+2026-01-15 00:24:13,254 - temporal_gateway.registry - INFO - ✓ fluxdev: Loading from override file
+2026-01-15 00:24:13,255 - temporal_gateway.registry - INFO -   Loaded 13 parameters from override file
+2026-01-15 00:24:13,257 - temporal_gateway.registry - INFO - ✓ firstEndTovideo: Loading from override file
+2026-01-15 00:24:13,258 - temporal_gateway.registry - INFO -   Loaded 44 parameters from override file
+2026-01-15 00:24:13,259 - temporal_gateway.registry - INFO - ✓ image_qwen_edit: Loading from override file
+2026-01-15 00:24:13,261 - temporal_gateway.registry - INFO -   Loaded 27 parameters from override file
+2026-01-15 00:24:13,263 - temporal_gateway.registry - INFO - ✓ video_wan2_2_14B_fun_camera_test: Loading from override file
+2026-01-15 00:24:13,264 - temporal_gateway.registry - INFO -   Loaded 49 parameters from override file
+2026-01-15 00:24:13,266 - temporal_gateway.registry - INFO - ✓ qwen_image_edit: Loading from override file
+2026-01-15 00:24:13,267 - temporal_gateway.registry - INFO -   Loaded 25 parameters from override file
+2026-01-15 00:24:13,268 - temporal_gateway.registry - INFO - ✓ video_wan2_2_14B_i2v: Loading from override file
+2026-01-15 00:24:13,269 - temporal_gateway.registry - INFO -   Loaded 43 parameters from override file
+2026-01-15 00:24:13,270 - temporal_gateway.registry - INFO - ✓ imageSave: Loading from override file
+2026-01-15 00:24:13,272 - temporal_gateway.registry - INFO -   Loaded 9 parameters from override file
+2026-01-15 00:24:13,273 - temporal_gateway.registry - INFO - Discovery complete: 7 workflows, 0 generated, 7 loaded, 0 regenerated
+2026-01-15 00:24:13,274 - temporal_gateway.registry - INFO - ✓ fluxdev: Loading from override file
+2026-01-15 00:24:13,275 - temporal_gateway.registry - INFO -   Loaded 13 parameters from override file
+2026-01-15 00:24:13,278 - temporal_gateway.registry - INFO - ✓ firstEndTovideo: Loading from override file
+2026-01-15 00:24:13,279 - temporal_gateway.registry - INFO -   Loaded 44 parameters from override file
+2026-01-15 00:24:13,280 - temporal_gateway.registry - INFO - ✓ image_qwen_edit: Loading from override file
+2026-01-15 00:24:13,282 - temporal_gateway.registry - INFO -   Loaded 27 parameters from override file
+2026-01-15 00:24:13,283 - temporal_gateway.registry - INFO - ✓ video_wan2_2_14B_fun_camera_test: Loading from override file
+2026-01-15 00:24:13,284 - temporal_gateway.registry - INFO -   Loaded 49 parameters from override file
+2026-01-15 00:24:13,286 - temporal_gateway.registry - INFO - ✓ qwen_image_edit: Loading from override file
+2026-01-15 00:24:13,287 - temporal_gateway.registry - INFO -   Loaded 25 parameters from override file
+2026-01-15 00:24:13,288 - temporal_gateway.registry - INFO - ✓ video_wan2_2_14B_i2v: Loading from override file
+2026-01-15 00:24:13,289 - temporal_gateway.registry - INFO -   Loaded 43 parameters from override file
+2026-01-15 00:24:13,291 - temporal_gateway.registry - INFO - ✓ imageSave: Loading from override file
+2026-01-15 00:24:13,292 - temporal_gateway.registry - INFO -   Loaded 9 parameters from override file
+2026-01-15 00:24:13,294 - temporal_gateway.registry - INFO - Discovery complete: 7 workflows, 0 generated, 7 loaded, 0 regenerated
+2026-01-15 00:24:13,295 - temporal_gateway.clients.approval.routes - INFO - Approval service initialized with Temporal client
+2026-01-15 00:24:13,334 - temporal_gateway.services.broadcast - INFO - Created broadcast instance for redis://localhost:6379
+2026-01-15 00:24:13,336 - temporal_gateway.services.broadcast - INFO - Broadcast connected to Redis
+2026-01-15 00:24:13,338 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-14T18:54:13.337980Z'}
+2026-01-15 00:24:13,339 - temporal_gateway.logging_config - INFO - {'event': '🚀 Temporal Gateway Started', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-14T18:54:13.339664Z'}
+2026-01-15 00:24:13,341 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-14T18:54:13.341124Z'}
+2026-01-15 00:24:13,343 - temporal_gateway.logging_config - INFO - {'host': 'localhost:7233', 'event': 'Connected to Temporal', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-14T18:54:13.342978Z'}
+2026-01-15 00:24:13,344 - temporal_gateway.logging_config - INFO - {'url': 'http://localhost:8001', 'event': 'Gateway API', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-14T18:54:13.344267Z'}
+2026-01-15 00:24:13,345 - temporal_gateway.logging_config - INFO - {'url': 'http://localhost:8233', 'event': 'Temporal UI', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-14T18:54:13.345480Z'}
+2026-01-15 00:24:13,346 - temporal_gateway.logging_config - INFO - {'count': 7, 'event': 'Workflows discovered', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-14T18:54:13.346646Z'}
+2026-01-15 00:24:13,348 - temporal_gateway.logging_config - INFO - {'path': '/home/jaskirat/Documents/comfyautomate/temporal_gateway/logs/gateway_20260114_185413.log', 'event': 'Log file', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-14T18:54:13.348444Z'}
+2026-01-15 00:24:13,349 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-14T18:54:13.349841Z'}
+2026-01-15 00:24:19,278 - __main__ - INFO - {'event': 'SSE client subscribing to chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:54:19.278813Z'}
+2026-01-15 00:24:19,283 - __main__ - INFO - {'event': 'Starting SSE subscription for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:54:19.283843Z'}
+2026-01-15 00:24:21,961 - __main__ - INFO - {'event': 'SSE sending event: approval_requested for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:54:21.961363Z'}
+2026-01-15 00:24:22,013 - __main__ - INFO - {'event': 'SSE sending event: approval_requested for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:54:22.013955Z'}
+2026-01-15 00:24:25,484 - temporal_gateway.clients.approval.routes - INFO - Approving token OUaWedrrxLy2kbNF... with service that has client: True
+2026-01-15 00:24:25,519 - temporal_gateway.clients.approval.service - INFO - Sent approval signal to job chain-image-edit-to-video-pipeline-c544ce1f-b051-49d8-bbb7-4e882b0dff7c for step extract_frame1: decision=approved, decided_by=cli-user
+2026-01-15 00:24:25,521 - temporal_gateway.clients.approval.routes - INFO - Approve result: {'status': 'approved', 'approval_request_id': 'ff31ab9d-9420-4848-be3d-1d4ded292d94', 'decided_by': 'cli-user', 'workflow_signaled': True}
+2026-01-15 00:24:25,553 - __main__ - INFO - {'event': 'SSE sending event: step_completed for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:54:25.553782Z'}
+2026-01-15 00:24:26,168 - temporal_gateway.clients.approval.routes - INFO - Approving token kOk2v_JcyAQsodmh... with service that has client: True
+2026-01-15 00:24:26,202 - temporal_gateway.clients.approval.service - INFO - Sent approval signal to job chain-image-edit-to-video-pipeline-c544ce1f-b051-49d8-bbb7-4e882b0dff7c for step extract_frame2: decision=approved, decided_by=cli-user
+2026-01-15 00:24:26,204 - temporal_gateway.clients.approval.routes - INFO - Approve result: {'status': 'approved', 'approval_request_id': '10a80e9f-7a49-4303-aeaf-b3aff075bad7', 'decided_by': 'cli-user', 'workflow_signaled': True}
+2026-01-15 00:24:26,238 - __main__ - INFO - {'event': 'SSE sending event: step_completed for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:54:26.238826Z'}
+2026-01-15 00:25:25,573 - __main__ - INFO - {'event': 'SSE sending event: approval_requested for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:55:25.573478Z'}
+2026-01-15 00:25:35,899 - temporal_gateway.clients.approval.routes - INFO - Approving token b_brOSdP0duKZEGx... with service that has client: True
+2026-01-15 00:25:35,936 - temporal_gateway.clients.approval.service - INFO - Sent approval signal to job chain-image-edit-to-video-pipeline-c544ce1f-b051-49d8-bbb7-4e882b0dff7c for step edit_frame2: decision=approved, decided_by=cli-user
+2026-01-15 00:25:35,939 - temporal_gateway.clients.approval.routes - INFO - Approve result: {'status': 'approved', 'approval_request_id': 'eb424e69-5aa7-4d93-bc30-47b43e83de0f', 'decided_by': 'cli-user', 'workflow_signaled': True}
+2026-01-15 00:25:35,975 - __main__ - INFO - {'event': 'SSE sending event: step_completed for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:55:35.975895Z'}
+2026-01-15 00:25:52,533 - __main__ - INFO - {'event': 'SSE sending event: approval_requested for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:55:52.533253Z'}
+2026-01-15 00:26:24,437 - temporal_gateway.clients.approval.service - INFO - Sent approval signal to job chain-image-edit-to-video-pipeline-c544ce1f-b051-49d8-bbb7-4e882b0dff7c for step edit_frame1: decision=rejected, decided_by=cli-user
+2026-01-15 00:26:49,243 - __main__ - INFO - {'event': 'SSE sending event: approval_requested for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:56:49.243462Z'}
+2026-01-15 00:27:02,555 - temporal_gateway.clients.approval.routes - INFO - Approving token xib3SLkCeCM4mkLt... with service that has client: True
+2026-01-15 00:27:02,586 - temporal_gateway.clients.approval.service - INFO - Sent approval signal to job chain-image-edit-to-video-pipeline-c544ce1f-b051-49d8-bbb7-4e882b0dff7c for step edit_frame1: decision=approved, decided_by=cli-user
+2026-01-15 00:27:02,589 - temporal_gateway.clients.approval.routes - INFO - Approve result: {'status': 'approved', 'approval_request_id': '93eda581-95e3-495d-83fa-a4960de3e5ba', 'decided_by': 'cli-user', 'workflow_signaled': True}
+2026-01-15 00:27:02,621 - __main__ - INFO - {'event': 'SSE sending event: step_completed for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T18:57:02.621566Z'}
+2026-01-15 00:32:34,311 - __main__ - INFO - {'event': 'SSE sending event: approval_requested for chain:6dd30b03-1cd4-4472-9c01-fbd2a5d1da29', 'level': 'info', 'logger': '__main__', 'timestamp': '2026-01-14T19:02:34.311509Z'}

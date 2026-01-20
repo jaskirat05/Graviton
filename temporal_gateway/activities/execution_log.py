@@ -11,7 +11,7 @@ from temporalio import activity
 # Add parent to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from gateway.observability import create_log_from_history
+from temporal_gateway.observability import create_log_from_history
 
 
 @activity.defn

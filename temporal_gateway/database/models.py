@@ -32,12 +32,15 @@ class Chain(Base):
     description = Column(Text)
     version = Column(Integer, nullable=False, default=1)  # Incremental version number
 
+    # Content-addressable caching
+    definition_hash = Column(String(16), index=True)  # Short hash of chain definition for cache lookup
+
     # Regeneration tracking
     regenerated_from_step_id = Column(String)  # Which step triggered this version (NULL for initial v1)
 
-    # Temporal workflow info
-    temporal_workflow_id = Column(String, unique=True)
-    temporal_run_id = Column(String)
+    # Job execution info (Temporal workflow)
+    job_id = Column(String, unique=True)
+    job_run_id = Column(String)
 
     # Status
     status = Column(String, nullable=False)  # 'initializing', 'executing_level_N', 'completed', 'failed', 'cancelled', 'partial'
@@ -61,7 +64,7 @@ class Chain(Base):
     # Constraints and Indexes
     __table_args__ = (
         UniqueConstraint('name', 'version', name='_chain_name_version_uc'),
-        Index("idx_chains_temporal", "temporal_workflow_id"),
+        Index("idx_chains_job", "job_id"),
         Index("idx_chains_name_status_version", "name", "status", "version"),
         Index("idx_chains_started", "started_at"),
     )
@@ -86,9 +89,9 @@ class Workflow(Base):
     server_address = Column(String, nullable=False)
     prompt_id = Column(String, nullable=False)
 
-    # Temporal workflow info
-    temporal_workflow_id = Column(String)
-    temporal_run_id = Column(String)
+    # Job execution info (Temporal workflow)
+    job_id = Column(String)
+    job_run_id = Column(String)
 
     # Status
     status = Column(String, nullable=False)  # 'queued', 'executing', 'completed', 'failed', 'skipped'
@@ -119,7 +122,7 @@ class Workflow(Base):
     __table_args__ = (
         Index("idx_workflows_chain", "chain_id", "step_id"),
         Index("idx_workflows_prompt", "prompt_id"),
-        Index("idx_workflows_temporal", "temporal_workflow_id"),
+        Index("idx_workflows_job", "job_id"),
         Index("idx_workflows_status", "status"),
     )
 
@@ -230,10 +233,10 @@ class ApprovalRequest(Base):
     chain_id = Column(String, ForeignKey("chains.id", ondelete="CASCADE"))  # Optional, for chain context
     step_id = Column(String)  # Which step in the chain this approval is for
 
-    # Temporal workflow info (parent workflow waiting for approval)
+    # Job execution info (parent workflow waiting for approval)
     # Multiple steps in same workflow can have separate approval requests
-    temporal_workflow_id = Column(String, nullable=False)  # Workflow to signal when decision made
-    temporal_run_id = Column(String)
+    job_id = Column(String, nullable=False)  # Job to signal when decision made
+    job_run_id = Column(String)
 
     # Links
     approval_link_token = Column(String, unique=True, nullable=False)  # Secure token for approval URL
@@ -261,7 +264,7 @@ class ApprovalRequest(Base):
         Index("idx_approval_requests_artifact", "artifact_id"),
         Index("idx_approval_requests_chain", "chain_id"),
         Index("idx_approval_requests_status", "status"),
-        Index("idx_approval_requests_temporal", "temporal_workflow_id"),
+        Index("idx_approval_requests_job", "job_id"),
         Index("idx_approval_requests_link_token", "approval_link_token"),
     )
 

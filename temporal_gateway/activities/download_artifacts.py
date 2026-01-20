@@ -1,11 +1,11 @@
 """
-Activity: Download artifacts from ComfyUI and store locally + DB
+Activity: Download artifacts from ComfyUI and persist to database
 """
 
 import sys
 import uuid
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
 
 from temporalio import activity
@@ -13,99 +13,100 @@ from temporalio import activity
 # Add parent to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from gateway.core import image_storage
+from temporal_gateway.config import get_storage_dir
 from temporal_gateway.clients.comfy import ComfyUIClient
 from temporal_gateway.database import get_session, create_artifact
 
 
 @activity.defn
-async def download_and_store_images(
+async def download_and_store_artifacts(
+    workflow_id: str,
     server_address: str,
-    output_files: list[Dict[str, Any]],
-    workflow_id: Optional[str] = None
+    output_files: list[Dict[str, Any]]
 ) -> list[Dict[str, Any]]:
     """
-    Activity: Download generated images/videos from ComfyUI and store locally + DB
+    Activity: Download artifacts from ComfyUI and ALWAYS store to database
+
+    This activity is for workflows where artifact tracking is required.
+    Use download_and_store_images() for ephemeral downloads without DB.
 
     Args:
+        workflow_id: Workflow ID to link artifacts to (REQUIRED)
         server_address: Server address
         output_files: List of output file info from get_server_output_files
-        workflow_id: Optional workflow ID to link artifacts to
 
     Returns:
-        List of stored file info with local paths
+        List of stored artifact info with artifact IDs
     """
-    activity.logger.info(f"Downloading {len(output_files)} file(s)")
+    activity.logger.info(f"Downloading and persisting {len(output_files)} artifact(s) for workflow {workflow_id}")
 
     try:
         client = ComfyUIClient(server_address)
-        stored_files = []
+        stored_artifacts = []
 
-        for file_info in output_files:
-            filename = file_info['filename']
-            subfolder = file_info.get('subfolder', '')
-            file_type = file_info.get('type', 'output')
+        with get_session() as session:
+            for file_info in output_files:
+                filename = file_info['filename']
+                subfolder = file_info.get('subfolder', '')
+                file_type = file_info.get('type', 'output')
 
-            # Download file
-            file_data = await client.download_file(
-                filename=filename,
-                subfolder=subfolder,
-                folder_type=file_type
-            )
+                # Download file
+                file_data = await client.download_file(
+                    filename=filename,
+                    subfolder=subfolder,
+                    folder_type=file_type
+                )
 
-            # Store locally using image_storage
-            file_ext = Path(filename).suffix
-            unique_filename = f"{uuid.uuid4().hex[:8]}{file_ext}"
-            local_path = image_storage.storage_dir / unique_filename
+                # Store locally
+                file_ext = Path(filename).suffix
+                unique_filename = f"{uuid.uuid4().hex[:8]}{file_ext}"
+                storage_dir = get_storage_dir()
+                local_path = storage_dir / unique_filename
 
-            local_path.write_bytes(file_data)
+                local_path.write_bytes(file_data)
 
-            file_dict = {
-                "filename": unique_filename,
-                "original_filename": filename,
-                "local_path": str(local_path),
-                "node_id": file_info.get('node_id'),
-                "server_address": server_address,
-                "downloaded_at": datetime.utcnow().isoformat(),
-                "file_size": len(file_data),
-                "file_type": _detect_file_type(file_ext),
-                "file_format": file_ext.lstrip('.'),
-            }
+                # Detect file type
+                detected_type = _detect_file_type(file_ext)
+                file_format = file_ext.lstrip('.')
 
-            # If workflow_id provided, save to database
-            if workflow_id:
-                try:
-                    with get_session() as session:
-                        artifact = create_artifact(
-                            session=session,
-                            workflow_id=workflow_id,
-                            filename=filename,
-                            local_filename=unique_filename,
-                            local_path=str(local_path),
-                            file_type=file_dict["file_type"],
-                            file_format=file_dict["file_format"],
-                            file_size=file_dict["file_size"],
-                            node_id=file_info.get('node_id'),
-                            subfolder=subfolder,
-                            comfy_folder_type=file_type,
-                            approval_status="auto_approved",
-                        )
-                        file_dict["artifact_id"] = artifact.id
-                        activity.logger.info(f"✓ Saved artifact to DB: {artifact.id}")
-                except Exception as db_error:
-                    activity.logger.error(f"Failed to save artifact to DB: {db_error}")
-                    # Continue even if DB save fails
+                # Save to database
+                artifact = create_artifact(
+                    session=session,
+                    workflow_id=workflow_id,
+                    filename=filename,
+                    local_filename=unique_filename,
+                    local_path=str(local_path),
+                    file_type=detected_type,
+                    file_format=file_format,
+                    file_size=len(file_data),
+                    node_id=file_info.get('node_id'),
+                    subfolder=subfolder,
+                    comfy_folder_type=file_type,
+                    approval_status="auto_approved",
+                )
 
-            stored_files.append(file_dict)
+                stored_artifacts.append({
+                    "artifact_id": artifact.id,
+                    "filename": unique_filename,
+                    "original_filename": filename,
+                    "local_path": str(local_path),
+                    "node_id": file_info.get('node_id'),
+                    "server_address": server_address,
+                    "file_size": len(file_data),
+                    "file_type": detected_type,
+                    "file_format": file_format,
+                    "downloaded_at": datetime.utcnow().isoformat(),
+                })
+
+                activity.logger.info(f"✓ Saved artifact to DB: {artifact.id} ({filename})")
 
         await client.close()
-        activity.logger.info(f"Downloaded {len(stored_files)} file(s)")
-        return stored_files
+        activity.logger.info(f"Downloaded and persisted {len(stored_artifacts)} artifact(s)")
+        return stored_artifacts
 
     except Exception as e:
-        activity.logger.error(f"Failed to download files: {e}")
-        # Don't fail workflow if download fails
-        return []
+        activity.logger.error(f"Failed to download and persist artifacts: {e}")
+        raise  # Fail workflow if DB persistence fails
 
 
 def _detect_file_type(file_ext: str) -> str:

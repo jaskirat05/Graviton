@@ -8,6 +8,28 @@ from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field, validator
 
 
+class ChainInputDefinition(BaseModel):
+    """
+    Represents a local file input that needs to be uploaded to ComfyUI
+
+    Used to upload files from the gateway server to ComfyUI's input directory
+    before chain execution begins.
+
+    Attributes:
+        source: Local path on the gateway server (absolute or relative to project root)
+        target: Target filename in ComfyUI's input directory (optional, uses source basename if not provided)
+    """
+    source: str = Field(..., description="Local file path on gateway server")
+    target: Optional[str] = Field(None, description="Target filename in ComfyUI input/")
+
+    def get_target_filename(self) -> str:
+        """Get the target filename, defaulting to source basename"""
+        if self.target:
+            return self.target
+        from pathlib import Path
+        return Path(self.source).name
+
+
 class ChainStepDefinition(BaseModel):
     """
     Represents a single step in a chain definition (from YAML)
@@ -46,11 +68,16 @@ class ChainDefinition(BaseModel):
     Attributes:
         name: Chain name
         description: Human-readable description
+        inputs: Local files to upload to ComfyUI before execution
         steps: List of steps in the chain
         metadata: Optional metadata (tags, version, etc.)
     """
     name: str = Field(..., description="Chain name")
     description: Optional[str] = Field(None, description="Chain description")
+    inputs: Dict[str, ChainInputDefinition] = Field(
+        default_factory=dict,
+        description="Local files to upload to ComfyUI (key -> input definition)"
+    )
     steps: List[ChainStepDefinition] = Field(..., description="Chain steps")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Optional metadata")
 

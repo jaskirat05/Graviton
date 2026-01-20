@@ -11,8 +11,6 @@ from temporalio import activity
 # Add parent to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from temporal_gateway.workflow_registry import get_registry
-
 
 @activity.defn
 async def apply_workflow_parameters(
@@ -29,6 +27,9 @@ async def apply_workflow_parameters(
     Returns:
         Workflow JSON with parameters applied
     """
+    # Lazy import to avoid circular dependency
+    from temporal_gateway.registry import get_registry
+
     activity.logger.info(f"Applying parameters to workflow: {workflow_name}")
 
     try:

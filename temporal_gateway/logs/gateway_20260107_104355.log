@@ -1,0 +1,48 @@
+2026-01-07 16:13:55,163 - temporal_gateway.logging_config - INFO - {'log_file': '/home/jaskirat/Documents/comfyautomate/temporal_gateway/logs/gateway_20260107_104355.log', 'level': 'info', 'event': 'Logging configured', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-07T10:43:55.163511Z'}
+2026-01-07 16:13:55,175 - temporal_gateway.workflow_registry - INFO - WorkflowRegistry initialized: /home/jaskirat/Documents/comfyautomate/workflows
+2026-01-07 16:13:55,177 - temporal_gateway.workflow_registry - INFO - ✓ fluxdev: Loading from override file
+2026-01-07 16:13:55,179 - temporal_gateway.workflow_registry - INFO -   Loaded 13 parameters from override file
+2026-01-07 16:13:55,182 - temporal_gateway.workflow_registry - INFO - ✓ firstEndTovideo: Loading from override file
+2026-01-07 16:13:55,184 - temporal_gateway.workflow_registry - INFO -   Loaded 44 parameters from override file
+2026-01-07 16:13:55,186 - temporal_gateway.workflow_registry - INFO - ✓ image_qwen_edit: Loading from override file
+2026-01-07 16:13:55,187 - temporal_gateway.workflow_registry - INFO -   Loaded 27 parameters from override file
+2026-01-07 16:13:55,189 - temporal_gateway.workflow_registry - INFO - ✓ video_wan2_2_14B_fun_camera_test: Loading from override file
+2026-01-07 16:13:55,191 - temporal_gateway.workflow_registry - INFO -   Loaded 49 parameters from override file
+2026-01-07 16:13:55,193 - temporal_gateway.workflow_registry - INFO - ✓ qwen_image_edit: Loading from override file
+2026-01-07 16:13:55,195 - temporal_gateway.workflow_registry - INFO -   Loaded 25 parameters from override file
+2026-01-07 16:13:55,198 - temporal_gateway.workflow_registry - INFO - ✓ video_wan2_2_14B_i2v: Loading from override file
+2026-01-07 16:13:55,200 - temporal_gateway.workflow_registry - INFO -   Loaded 43 parameters from override file
+2026-01-07 16:13:55,202 - temporal_gateway.workflow_registry - INFO - ✓ imageSave: Loading from override file
+2026-01-07 16:13:55,204 - temporal_gateway.workflow_registry - INFO -   Loaded 9 parameters from override file
+2026-01-07 16:13:55,205 - temporal_gateway.workflow_registry - INFO - Discovery complete: 7 workflows, 0 generated, 7 loaded, 0 regenerated
+2026-01-07 16:13:55,207 - temporal_gateway.workflow_registry - INFO - ✓ fluxdev: Loading from override file
+2026-01-07 16:13:55,209 - temporal_gateway.workflow_registry - INFO -   Loaded 13 parameters from override file
+2026-01-07 16:13:55,211 - temporal_gateway.workflow_registry - INFO - ✓ firstEndTovideo: Loading from override file
+2026-01-07 16:13:55,213 - temporal_gateway.workflow_registry - INFO -   Loaded 44 parameters from override file
+2026-01-07 16:13:55,215 - temporal_gateway.workflow_registry - INFO - ✓ image_qwen_edit: Loading from override file
+2026-01-07 16:13:55,217 - temporal_gateway.workflow_registry - INFO -   Loaded 27 parameters from override file
+2026-01-07 16:13:55,219 - temporal_gateway.workflow_registry - INFO - ✓ video_wan2_2_14B_fun_camera_test: Loading from override file
+2026-01-07 16:13:55,220 - temporal_gateway.workflow_registry - INFO -   Loaded 49 parameters from override file
+2026-01-07 16:13:55,222 - temporal_gateway.workflow_registry - INFO - ✓ qwen_image_edit: Loading from override file
+2026-01-07 16:13:55,224 - temporal_gateway.workflow_registry - INFO -   Loaded 25 parameters from override file
+2026-01-07 16:13:55,226 - temporal_gateway.workflow_registry - INFO - ✓ video_wan2_2_14B_i2v: Loading from override file
+2026-01-07 16:13:55,227 - temporal_gateway.workflow_registry - INFO -   Loaded 43 parameters from override file
+2026-01-07 16:13:55,229 - temporal_gateway.workflow_registry - INFO - ✓ imageSave: Loading from override file
+2026-01-07 16:13:55,230 - temporal_gateway.workflow_registry - INFO -   Loaded 9 parameters from override file
+2026-01-07 16:13:55,231 - temporal_gateway.workflow_registry - INFO - Discovery complete: 7 workflows, 0 generated, 7 loaded, 0 regenerated
+2026-01-07 16:13:55,232 - temporal_gateway.clients.approval.routes - INFO - Approval service initialized with Temporal client
+2026-01-07 16:13:55,233 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-07T10:43:55.233703Z'}
+2026-01-07 16:13:55,235 - temporal_gateway.logging_config - INFO - {'event': '🚀 Temporal Gateway Started', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-07T10:43:55.235276Z'}
+2026-01-07 16:13:55,236 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-07T10:43:55.236627Z'}
+2026-01-07 16:13:55,237 - temporal_gateway.logging_config - INFO - {'host': 'localhost:7233', 'event': 'Connected to Temporal', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-07T10:43:55.237793Z'}
+2026-01-07 16:13:55,239 - temporal_gateway.logging_config - INFO - {'url': 'http://localhost:8001', 'event': 'Gateway API', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-07T10:43:55.239386Z'}
+2026-01-07 16:13:55,241 - temporal_gateway.logging_config - INFO - {'url': 'http://localhost:8233', 'event': 'Temporal UI', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-07T10:43:55.241054Z'}
+2026-01-07 16:13:55,242 - temporal_gateway.logging_config - INFO - {'count': 7, 'event': 'Workflows discovered', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-07T10:43:55.242810Z'}
+2026-01-07 16:13:55,244 - temporal_gateway.logging_config - INFO - {'path': '/home/jaskirat/Documents/comfyautomate/temporal_gateway/logs/gateway_20260107_104355.log', 'event': 'Log file', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-07T10:43:55.244457Z'}
+2026-01-07 16:13:55,246 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-07T10:43:55.246365Z'}
+2026-01-07 16:16:28,437 - temporal_gateway.clients.approval.routes - INFO - Approving token Rb1F4mBAddQG5KtT... with service that has client: True
+2026-01-07 16:16:28,479 - temporal_gateway.clients.approval.service - INFO - Sent approval signal to workflow chain-flux-to-qwen-edit-d7ce1e6e-fbf9-4193-92f0-392a31beb3a9 for step generate_image: decision=approved, decided_by=test-user
+2026-01-07 16:16:28,480 - temporal_gateway.clients.approval.routes - INFO - Approve result: {'status': 'approved', 'approval_request_id': '96391d4c-8277-4a02-8865-59d099f5df2d', 'decided_by': 'test-user', 'workflow_signaled': True}
+2026-01-07 16:17:36,848 - temporal_gateway.clients.approval.routes - INFO - Approving token ObSqNULfzKr2ttrv... with service that has client: True
+2026-01-07 16:17:36,864 - temporal_gateway.clients.approval.service - INFO - Sent approval signal to workflow chain-flux-to-qwen-edit-d7ce1e6e-fbf9-4193-92f0-392a31beb3a9 for step qwen_edit: decision=approved, decided_by=test-user
+2026-01-07 16:17:36,866 - temporal_gateway.clients.approval.routes - INFO - Approve result: {'status': 'approved', 'approval_request_id': '9f45476f-b773-4a5a-948b-f57727024cc9', 'decided_by': 'test-user', 'workflow_signaled': True}

@@ -12,13 +12,14 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 
-def setup_logging(log_dir: Path = None, log_level: str = "INFO"):
+def setup_logging(log_dir: Path = None, log_level: str = "INFO", log_prefix: str = "gateway"):
     """
     Setup structured logging with rich colored output
 
     Args:
         log_dir: Directory to save log files (optional)
         log_level: Logging level (INFO, DEBUG, WARNING, ERROR)
+        log_prefix: Prefix for log file name (e.g., "gateway", "worker")
     """
     # Create log directory if specified
     if log_dir:
@@ -26,7 +27,7 @@ def setup_logging(log_dir: Path = None, log_level: str = "INFO"):
         log_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        log_file = log_dir / f"gateway_{timestamp}.log"
+        log_file = log_dir / f"{log_prefix}_{timestamp}.log"
     else:
         log_file = None
 

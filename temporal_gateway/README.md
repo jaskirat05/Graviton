@@ -30,37 +30,34 @@ python temporal_gateway/main.py
 
 Gateway API runs on `http://localhost:8001`
 
-### 4. Use the SDK
+### 4. Execute via Chains API
 
-```python
-from temporal_sdk.client import TemporalComfyUISDK
-import json
+All workflow execution is done through chains (even single workflows are single-step chains):
 
-# Initialize SDK
-sdk = TemporalComfyUISDK(gateway_url="http://localhost:8001")
+```bash
+# List available chains
+curl http://localhost:8001/chains
 
-# Register server
-sdk.register_server(
-    name="GPU Server 1",
-    address="procure-x.testmcp.org"
-)
+# Execute a chain
+curl -X POST http://localhost:8001/chains/my_chain/execute \
+  -H "Content-Type: application/json" \
+  -d '{"initial_parameters": {"prompt": "A dragon flying"}}'
 
-# Execute workflow
-with open('workflow.json') as f:
-    workflow = json.load(f)
+# Check status
+curl http://localhost:8001/chains/status/{workflow_id}
 
-result = sdk.execute_workflow(workflow)
-print(f"Images: {result['images']}")
-print(f"Temporal UI: http://localhost:8233")
+# Get result
+curl http://localhost:8001/chains/result/{workflow_id}
 ```
+
+Temporal UI available at: `http://localhost:8233`
 
 ## Architecture
 
 ```
-User SDK → FastAPI Gateway (8001) → Temporal Server (7233) → Worker → ComfyUI
-                                           ↓
-                                     PostgreSQL
-                                     (in dev mode: SQLite)
+Chains API → FastAPI Gateway (8001) → Temporal Server (7233) → Worker → ComfyUI
+                                              ↓
+                                        SQLite/PostgreSQL
 ```
 
 ## Key Features

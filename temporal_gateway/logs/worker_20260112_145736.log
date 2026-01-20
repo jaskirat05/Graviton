@@ -1,0 +1,18 @@
+2026-01-12 20:27:36,575 - temporal_gateway.logging_config - INFO - {'log_file': '/home/jaskirat/Documents/comfyautomate/temporal_gateway/logs/worker_20260112_145736.log', 'level': 'info', 'event': 'Logging configured', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.575779Z'}
+2026-01-12 20:27:36,580 - temporal_gateway.logging_config - INFO - {'event': 'Initializing artifact database...', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.579999Z'}
+2026-01-12 20:27:36,582 - temporal_gateway.logging_config - INFO - {'event': 'Database initialized', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.582621Z'}
+2026-01-12 20:27:36,583 - temporal_gateway.logging_config - INFO - {'event': 'Connecting to Redis for event broadcasting...', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.583830Z'}
+2026-01-12 20:27:36,621 - temporal_gateway.services.broadcast - INFO - Created broadcast instance for redis://localhost:6379
+2026-01-12 20:27:36,625 - temporal_gateway.services.broadcast - INFO - Broadcast connected to Redis
+2026-01-12 20:27:36,626 - temporal_gateway.logging_config - INFO - {'event': 'Redis broadcast connected', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.626033Z'}
+2026-01-12 20:27:36,627 - temporal_gateway.logging_config - INFO - {'event': 'Loading server registry...', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.627189Z'}
+2026-01-12 20:27:36,628 - temporal_gateway.servers.registry - INFO - Registered server: procure-x (comfyui)
+2026-01-12 20:27:36,629 - temporal_gateway.servers.registry - INFO - Loaded 1 servers from config
+2026-01-12 20:27:36,630 - temporal_gateway.logging_config - INFO - {'event': 'Registered 1 servers', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.630345Z'}
+2026-01-12 20:27:36,631 - temporal_gateway.logging_config - INFO - {'event': '  Server: procure-x (comfyui)', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.631475Z'}
+2026-01-12 20:27:36,756 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.756234Z'}
+2026-01-12 20:27:36,758 - temporal_gateway.logging_config - INFO - {'event': '🔧 Temporal Worker Started', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.758019Z'}
+2026-01-12 20:27:36,759 - temporal_gateway.logging_config - INFO - {'event': '============================================================', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.759310Z'}
+2026-01-12 20:27:36,760 - temporal_gateway.logging_config - INFO - {'host': 'localhost:7233', 'event': 'Connected to Temporal', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.760788Z'}
+2026-01-12 20:27:36,762 - temporal_gateway.logging_config - INFO - {'queue': 'comfyui-gpu-farm', 'event': 'Task Queue', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.762104Z'}
+2026-01-12 20:27:36,763 - temporal_gateway.logging_config - INFO - {'workflows': ['ComfyUIWorkflow', 'ChainExecutorWorkflow'], 'event': 'Workflows registered', 'level': 'info', 'logger': 'temporal_gateway.logging_config', 'timestamp': '2026-01-12T14:57:36.763459Z'}

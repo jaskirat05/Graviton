@@ -1,0 +1,11 @@
+2026-01-20 15:00:41,321 - worker - INFO - Initializing artifact database...
+2026-01-20 15:00:41,322 - worker - INFO - Database initialized
+2026-01-20 15:00:41,323 - worker - INFO - Connecting to Redis for event broadcasting...
+2026-01-20 15:00:41,360 - temporal_gateway.services.broadcast - INFO - Created broadcast instance for redis://localhost:6379
+2026-01-20 15:00:41,363 - temporal_gateway.services.broadcast - INFO - Broadcast connected to Redis
+2026-01-20 15:00:41,363 - worker - INFO - Redis broadcast connected
+2026-01-20 15:00:41,363 - worker - INFO - Loading server registry...
+2026-01-20 15:00:41,363 - temporal_gateway.servers.registry - INFO - Registered server: procure-x (comfyui)
+2026-01-20 15:00:41,363 - temporal_gateway.servers.registry - INFO - Loaded 1 servers from config
+2026-01-20 15:00:41,363 - worker - INFO - Registered 1 servers
+2026-01-20 15:00:41,363 - worker - INFO -   Server: procure-x (comfyui)

@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from temporalio.client import Client
 
-from temporal_gateway.workflow_registry import get_registry
+from temporal_gateway.registry import get_registry
 from temporal_gateway.database.crud.approval import (
     get_approval_request_by_token,
     approve_approval_request,
@@ -209,7 +209,7 @@ class ApprovalService:
             token: Approval link token
 
         Returns:
-            Dict with parameter schema
+            Dict with parameter schema and current values
 
         Raises:
             ValueError: If token is invalid or workflow not found
@@ -235,15 +235,23 @@ class ApprovalService:
             if editable_params is None:
                 raise ValueError(f"Workflow '{workflow_name}' not found in registry")
 
-            # Convert to dict keyed by parameter key for easier lookup
-            param_schema = {p['key']: p for p in editable_params}
+            # Build list of parameters with current values included
+            parameters = []
+            for param in editable_params:
+                key = param['key']
+                parameters.append({
+                    "key": key,
+                    "type": param.get('type', 'str'),
+                    "category": param.get('category', 'other'),
+                    "description": param.get('description', ''),
+                    "default": param.get('default'),
+                    "current_value": current_parameters.get(key, param.get('default')),
+                })
 
             return {
                 "workflow_name": workflow_name,
                 "server": server,
-                "current_parameters": current_parameters,
-                "parameter_schema": param_schema,
-                "editable_parameters": list(param_schema.keys()),
+                "parameters": parameters,
             }
 
     async def approve(
@@ -281,7 +289,7 @@ class ApprovalService:
             # Send signal to Temporal workflow
             if self.temporal_client:
                 await self._send_approval_signal(
-                    updated_request.temporal_workflow_id,
+                    updated_request.job_id,
                     updated_request.step_id,  # Pass step_id
                     decision="approved",
                     decided_by=decided_by,
@@ -352,7 +360,7 @@ class ApprovalService:
             # Send signal to Temporal workflow
             if self.temporal_client:
                 await self._send_approval_signal(
-                    updated_request.temporal_workflow_id,
+                    updated_request.job_id,
                     updated_request.step_id,  # Pass step_id
                     decision="rejected",
                     decided_by=decided_by,
@@ -372,7 +380,7 @@ class ApprovalService:
 
     async def _send_approval_signal(
         self,
-        workflow_id: str,
+        job_id: str,
         step_id: str,
         decision: str,
         decided_by: str,
@@ -381,7 +389,7 @@ class ApprovalService:
     ) -> None:
         """Send approval decision signal to Temporal workflow"""
         try:
-            handle = self.temporal_client.get_workflow_handle(workflow_id)
+            handle = self.temporal_client.get_workflow_handle(job_id)
 
             # Pack all data into a single dict
             signal_data = {
@@ -395,11 +403,11 @@ class ApprovalService:
             await handle.signal("approval_decision_signal", signal_data)
 
             logger.info(
-                f"Sent approval signal to workflow {workflow_id} for step {step_id}: "
+                f"Sent approval signal to job {job_id} for step {step_id}: "
                 f"decision={decision}, decided_by={decided_by}"
             )
         except Exception as e:
-            logger.error(f"Failed to send approval signal to workflow {workflow_id}: {e}")
+            logger.error(f"Failed to send approval signal to job {job_id}: {e}")
             raise
 
 
