@@ -31,19 +31,14 @@ dependencies = [
 ]
 
 [project.scripts]
-comfy-chain = "temporal_gateway.cli.main:app"
+comfy-chain = "core.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["temporal_gateway", "gateway"]
+packages = ["core"]
 
 [tool.uv]
 package = true
-
-[tool.uv.workspace]
-members = [
-    "backend",
-]

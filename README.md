@@ -1,132 +1,183 @@
 # ComfyAutomate
 
-A clean, modular system for automating ComfyUI workflows with load balancing, chain execution, and observability.
+**Orchestrate multi-step ComfyUI workflows with approvals, retries, and distributed GPU load balancing.**
 
-## Project Structure
-
-```
-comfyautomate/
-├── temporal_gateway/      # FastAPI gateway with Temporal orchestration
-│   ├── main.py           # App entry point
-│   ├── worker.py         # Temporal worker
-│   ├── registry.py       # Workflow template registry
-│   ├── executors/        # Temporal workflow definitions
-│   │   ├── comfy_executor.py    # Single workflow executor
-│   │   └── chain_executor.py    # Chain orchestrator
-│   ├── activities/       # Temporal activities
-│   ├── chains/           # Chain system (DAG execution)
-│   │   ├── models/       # Data models (ExecutionGraph, StepNode)
-│   │   ├── interpreter.py # YAML parser & template resolver
-│   │   ├── engine.py     # Execution interface
-│   │   └── service.py    # Chain loading utilities
-│   ├── clients/          # External service clients
-│   │   ├── comfy/        # ComfyUI HTTP client
-│   │   └── approval/     # Approval API routes
-│   ├── core/             # Core business logic
-│   │   ├── load_balancer.py   # Server selection
-│   │   └── storage.py         # Image storage
-│   ├── database/         # SQLAlchemy models
-│   └── observability/    # Logging & monitoring
-│
-├── templates/            # ComfyUI workflow JSON templates
-├── chains/              # Chain YAML definitions
-├── tests/               # Test scripts
-├── docs/                # Documentation
-└── config.yaml          # Server configuration
-```
-
-## Quick Start
-
-### 1. Install Dependencies
-
-```bash
-uv sync
-```
-
-### 2. Start Services
-
-```bash
-# Start Temporal server
-temporal server start-dev
-
-# Start Temporal worker
-python temporal_gateway/worker.py
-
-# Start Temporal gateway (port 8001)
-python temporal_gateway/main.py
-```
-
-### 3. Execute Workflows via Chains
-
-All workflow execution is done through chains (even single workflows are single-step chains):
-
-```bash
-# List available chains
-curl http://localhost:8001/chains
-
-# Execute a chain
-curl -X POST http://localhost:8001/chains/my_chain/execute \
-  -H "Content-Type: application/json" \
-  -d '{"parameters": {"prompt": "A dragon flying"}}'
-
-# Check status
-curl http://localhost:8001/chains/status/{workflow_id}
-
-# Get result
-curl http://localhost:8001/chains/result/{workflow_id}
-```
-
-Temporal UI available at: `http://localhost:8233`
+ComfyAutomate turns ComfyUI into a production-ready workflow engine. Chain multiple workflows together, add human approval gates, automatically retry failed steps, and distribute work across multiple GPU servers.
 
 ## Features
 
-- **Durable Execution** - Workflows survive crashes via Temporal
-- **Chain Execution** - Multi-step pipelines with DAG dependencies
-- **Approval Workflows** - Human-in-the-loop with regeneration support
-- **Load Balancing** - Automatically selects the best available GPU server
-- **Automatic Logging** - Every execution is logged (JSONL format)
+- **Chain Workflows** - Define multi-step pipelines in YAML with automatic dependency resolution
+- **Approval Gates** - Pause execution for human review, reject and regenerate with new parameters
+- **Distributed Load Balancing** - Automatically route work to the least busy GPU server
+- **Durable Execution** - Workflows survive crashes and restarts (powered by Temporal)
+- **Real-time Progress** - SSE events for live updates in your UI
+- **CLI Tool** - Execute and monitor chains from the command line
 
-## Chain System
+## Quick Start
 
-Chains define multi-step workflows as YAML:
+### Prerequisites
+
+- Python 3.10+
+- [Temporal](https://docs.temporal.io/cli#install) (for durable workflow execution)
+- Redis (for real-time events)
+- At least one ComfyUI server
+
+### Installation
+
+```bash
+# Clone the repo
+git clone https://github.com/yourusername/comfyautomate.git
+cd comfyautomate
+
+# Install dependencies
+uv sync
+
+# Copy config and edit with your servers
+cp config.yaml.example config.yaml
+```
+
+### Start Services
+
+```bash
+# Terminal 1: Start Temporal server
+temporal server start-dev
+
+# Terminal 2: Start the worker
+python core/worker.py
+
+# Terminal 3: Start the gateway
+python core/main.py
+```
+
+### Execute a Chain
+
+```bash
+# Using the CLI
+comfy-chain execute chains/image-edit-to-video-pipeline.yaml \
+  --param prompt="A dragon breathing fire"
+
+# Or via API
+curl -X POST http://localhost:8001/chains/execute \
+  -H "Content-Type: application/json" \
+  -d @chains/image-edit-to-video-pipeline.yaml
+```
+
+## Chain Definition
+
+Chains are defined in YAML and support Jinja2 templating:
 
 ```yaml
 name: image-to-video
 description: Generate image then convert to video
+
 steps:
   - id: generate_image
-    workflow: text_to_image
+    workflow: flux_dev
     parameters:
       prompt: "{{ prompt }}"
+      seed: 42
 
   - id: create_video
-    workflow: image_to_video
+    workflow: wan_i2v
     depends_on: [generate_image]
+    requires_approval: true
     parameters:
       input_image: "{{ generate_image.output.image }}"
 ```
 
-Features:
-- Jinja2 templates for passing outputs between steps
-- Parallel execution of independent steps
-- Conditional step execution
-- Approval gates with regeneration
+### Key Features
 
-## Documentation
+- **Dependencies** - `depends_on` ensures steps run in order
+- **Parallel Execution** - Independent steps run simultaneously
+- **Approvals** - `requires_approval: true` pauses for human review
+- **Template Variables** - Reference outputs from previous steps with `{{ step_id.output.* }}`
+- **Conditional Steps** - Skip steps based on conditions
 
-- [Architecture](docs/ARCHITECTURE.md) - System design and data flows
-- [Logging Guide](docs/LOGGING.md) - Automatic logging explained
-- [Edge Cases](temporal_gateway/chains/EDGE_CASES.md) - Chain execution edge cases
+## Approval Flow
 
-## Development
+When a step has `requires_approval: true`:
+
+1. Workflow pauses after the step completes
+2. User reviews the output (image/video) via the approval UI
+3. **Approve** - Continues to next step
+4. **Reject** - Regenerates with new parameters you provide
+
+This enables iterative refinement without restarting the entire chain.
+
+## Architecture
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Gateway   │────▶│   Temporal  │────▶│   Worker    │
+│  (FastAPI)  │     │   Server    │     │             │
+└─────────────┘     └─────────────┘     └──────┬──────┘
+                                               │
+                    ┌──────────────────────────┼──────────────────────────┐
+                    ▼                          ▼                          ▼
+             ┌─────────────┐           ┌─────────────┐           ┌─────────────┐
+             │  ComfyUI 1  │           │  ComfyUI 2  │           │  ComfyUI N  │
+             │   (GPU)     │           │   (GPU)     │           │   (GPU)     │
+             └─────────────┘           └─────────────┘           └─────────────┘
+```
+
+- **Gateway** - REST API for submitting chains and querying status
+- **Temporal** - Durable workflow orchestration (handles retries, state persistence)
+- **Worker** - Executes workflow steps on ComfyUI servers
+- **Load Balancer** - Routes to server with shortest queue
+
+## Configuration
+
+Edit `config.yaml` to add your ComfyUI servers:
+
+```yaml
+servers:
+  - name: local
+    provider: comfyui
+    address: localhost
+    port: 8188
+
+  - name: remote-gpu
+    provider: comfyui
+    address: gpu.example.com
+    port: 8188
+```
+
+## Workflow Templates
+
+Place your ComfyUI workflow JSON files in `templates/`. The system automatically generates override files that define which parameters are exposed.
+
+```
+templates/
+├── flux_dev.json              # ComfyUI workflow export
+├── flux_dev_overrides.json    # Auto-generated parameter definitions
+├── wan_i2v.json
+└── wan_i2v_overrides.json
+```
+
+## CLI Commands
 
 ```bash
-# Run tests
-python test_chain_execution.py
+# Execute a chain
+comfy-chain execute chains/my-chain.yaml --param key=value
 
-# Check server health
-curl http://localhost:8001/health
+# List available workflows
+comfy-chain workflows list
 
-# View Temporal UI
-open http://localhost:8233
+# Check chain status
+comfy-chain status <chain-id>
 ```
+
+## API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /chains/execute` | Execute a chain |
+| `GET /chains/status/{id}` | Get chain status |
+| `GET /chains/result/{id}` | Get chain results |
+| `GET /chains/events?chain_id={id}` | SSE stream for real-time updates |
+| `POST /approval/{token}/approve` | Approve a pending step |
+| `POST /approval/{token}/reject` | Reject and regenerate |
+
+## License
+
+MIT

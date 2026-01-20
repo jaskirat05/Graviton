@@ -1,0 +1,34 @@
+# ComfyAutomate Configuration
+# Gateway and worker read from this file
+
+# Storage configuration
+storage:
+  artifacts_dir: ./artifacts  # Where generated images/videos are stored
+
+# Redis for pub/sub notifications
+redis:
+  url: redis://localhost:6379
+
+# Gateway settings
+gateway:
+  url: http://localhost:8001  # Used for building approval URLs in notifications
+
+# ComfyUI servers
+# Supported providers: comfyui (default), runpod (future), vastai (future)
+servers:
+  - name: local
+    provider: comfyui
+    address: localhost
+    port: 8188
+
+  # Add more servers here:
+  # - name: gpu-server-1
+  #   provider: comfyui
+  #   address: gpu1.example.com
+  #   port: 8188
+  #
+  # Future: RunPod example
+  # - name: runpod-1
+  #   provider: runpod
+  #   pod_id: abc123
+  #   api_key: ${RUNPOD_API_KEY}
