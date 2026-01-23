@@ -166,6 +166,18 @@ class ExecutionTracker:
                             current_node=node_id
                         ))
 
+                elif msg_type == 'progress':
+                    # Progress update with value/max (e.g., 1/20, 2/20, etc.)
+                    value = data.get('value', 0)
+                    max_val = data.get('max', 1)
+                    progress_ratio = value / max_val if max_val > 0 else 0.0
+                    self._log_ws(f"progress {value}/{max_val}")
+                    if self.progress_callback:
+                        self.progress_callback(ProgressUpdate(
+                            prompt_id=self.prompt_id,
+                            progress=progress_ratio
+                        ))
+
                 elif msg_type == 'execution_success':
                     self._log_ws("[WS] Execution completed successfully")
                     # Fetch final history data

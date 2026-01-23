@@ -669,7 +669,7 @@ class ChainExecutorWorkflow:
         )
         artifact_id = artifact_ids[0] if artifact_ids else None
 
-        # Publish completion event
+        # Publish completion event with artifact ID
         if self._chain_id:
             await job.execute_activity(
                 publish_step_completed_activity,
@@ -678,6 +678,7 @@ class ChainExecutorWorkflow:
                     step_id,
                     self._graph.chain_name,
                     self._chain_version,
+                    artifact_id,  # Include artifact ID for frontend preview
                 ],
                 start_to_close_timeout=timedelta(seconds=10)
             )

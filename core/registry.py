@@ -42,7 +42,7 @@ class WorkflowParameter:
     node_id: str               # ComfyUI node ID
     input_key: str             # Input key in the node
     default_value: Any         # Default value from workflow
-    type: str                  # Python type name
+    type: str                  # Python type name (str, int, float, bool)
     node_class: str            # ComfyUI node class
     node_title: str            # Human-readable node title
     description: str = ""      # User-editable description
@@ -61,12 +61,33 @@ class WorkflowOutput:
 
 
 @dataclass
+class SocketDefinition:
+    """Socket definition for node connections"""
+    id: str
+    type: str  # "image", "video", "any"
+    label: str
+
+
+@dataclass
+class UIMetadata:
+    """UI metadata for frontend node editor"""
+    nodeType: str
+    label: str
+    icon: str
+    color: str
+    category: str  # "image", "video", "utility"
+    # inputSockets are derived from parameters with input_key "image" or "video"
+    outputSockets: List[SocketDefinition] = field(default_factory=list)
+
+
+@dataclass
 class WorkflowInfo:
     """Information about a discovered workflow"""
     name: str
     parameters: List[WorkflowParameter] = field(default_factory=list)
     output: Optional[WorkflowOutput] = None
     description: str = ""
+    ui_metadata: Optional[UIMetadata] = None
 
 
 @dataclass
@@ -259,7 +280,18 @@ class WorkflowRegistry:
         with open(workflow_file, 'r', encoding='utf-8') as f:
             workflow_data = json.load(f)
 
-        # Calculate current hash
+        # Extract and strip UI metadata (not sent to ComfyUI)
+        ui_metadata_raw = workflow_data.pop("_ui_metadata", None)
+        ui_metadata = self._parse_ui_metadata(ui_metadata_raw) if ui_metadata_raw else None
+
+        # If _ui_metadata was present, write cleaned workflow back to disk
+        # This ensures workflow files stay ComfyUI-compatible
+        if ui_metadata_raw is not None:
+            with open(workflow_file, 'w', encoding='utf-8') as f:
+                json.dump(workflow_data, f, indent=2, ensure_ascii=False)
+            logger.info(f"  Stripped _ui_metadata from {workflow_file.name}")
+
+        # Calculate current hash (without _ui_metadata)
         current_hash = self._calculate_hash(workflow_data)
         self.workflow_hashes[workflow_name] = current_hash
 
@@ -274,7 +306,26 @@ class WorkflowRegistry:
             if stored_hash == current_hash:
                 # Hash matches - load parameters
                 logger.info(f"✓ {workflow_name}: Loading from override file")
-                self._load_from_override(workflow_name, workflow_data, override_data)
+
+                # If we stripped ui_metadata from workflow file, always update override file
+                # (workflow file is source of truth for UI metadata)
+                if ui_metadata_raw is not None:
+                    override_data["ui_metadata"] = {
+                        "nodeType": ui_metadata.nodeType,
+                        "label": ui_metadata.label,
+                        "icon": ui_metadata.icon,
+                        "color": ui_metadata.color,
+                        "category": ui_metadata.category,
+                        "outputSockets": [asdict(s) for s in ui_metadata.outputSockets],
+                    }
+                    with open(override_file, 'w', encoding='utf-8') as f:
+                        json.dump(override_data, f, indent=2, ensure_ascii=False)
+                    logger.info(f"  Migrated ui_metadata to {override_file.name}")
+                elif "ui_metadata" in override_data:
+                    # Load ui_metadata from override file (already migrated)
+                    ui_metadata = self._parse_ui_metadata(override_data["ui_metadata"])
+
+                self._load_from_override(workflow_name, workflow_data, override_data, ui_metadata)
                 return "loaded"
             else:
                 # Hash mismatch - regenerate
@@ -287,7 +338,8 @@ class WorkflowRegistry:
                     workflow_name,
                     workflow_data,
                     current_hash,
-                    override_file
+                    override_file,
+                    ui_metadata,
                 )
                 return "regenerated"
         else:
@@ -297,7 +349,8 @@ class WorkflowRegistry:
                 workflow_name,
                 workflow_data,
                 current_hash,
-                override_file
+                override_file,
+                ui_metadata,
             )
             return "generated"
 
@@ -332,12 +385,27 @@ class WorkflowRegistry:
         shutil.copy2(override_file, backup_path)
         logger.info(f"  Backed up old overrides to: {backup_path.name}")
 
+    def _parse_ui_metadata(self, ui_data: Dict) -> UIMetadata:
+        """Parse raw UI metadata dict into UIMetadata dataclass"""
+        output_sockets = [
+            SocketDefinition(**s) for s in ui_data.get("outputSockets", [])
+        ]
+        return UIMetadata(
+            nodeType=ui_data.get("nodeType", "unknown"),
+            label=ui_data.get("label", "Unknown"),
+            icon=ui_data.get("icon", "⚙️"),
+            color=ui_data.get("color", "#666666"),
+            category=ui_data.get("category", "utility"),
+            outputSockets=output_sockets,
+        )
+
     def _generate_override_file(
         self,
         workflow_name: str,
         workflow_data: Dict,
         workflow_hash: str,
-        override_file: Path
+        override_file: Path,
+        ui_metadata: Optional[UIMetadata] = None,
     ) -> None:
         """
         Generate override file with all mutable parameters
@@ -347,6 +415,7 @@ class WorkflowRegistry:
             workflow_data: Parsed workflow JSON
             workflow_hash: Calculated hash
             override_file: Path to write override file
+            ui_metadata: UI metadata for frontend (optional)
         """
         # Extract all mutable parameters
         parameters = self._extract_parameters(workflow_data)
@@ -359,7 +428,8 @@ class WorkflowRegistry:
             name=workflow_name,
             parameters=parameters,
             output=output,
-            description=f"Workflow with {len(parameters)} parameters"
+            description=f"Workflow with {len(parameters)} parameters",
+            ui_metadata=ui_metadata,
         )
 
         # Create override file data
@@ -388,6 +458,17 @@ class WorkflowRegistry:
             ]
         }
 
+        # Add UI metadata if present
+        if ui_metadata:
+            override_data["ui_metadata"] = {
+                "nodeType": ui_metadata.nodeType,
+                "label": ui_metadata.label,
+                "icon": ui_metadata.icon,
+                "color": ui_metadata.color,
+                "category": ui_metadata.category,
+                "outputSockets": [asdict(s) for s in ui_metadata.outputSockets],
+            }
+
         # Write to file (pretty-printed for human editing)
         with open(override_file, 'w', encoding='utf-8') as f:
             json.dump(override_data, f, indent=2, ensure_ascii=False)
@@ -401,7 +482,8 @@ class WorkflowRegistry:
         self,
         workflow_name: str,
         workflow_data: Dict,
-        override_data: Dict
+        override_data: Dict,
+        ui_metadata: Optional[UIMetadata] = None,
     ) -> None:
         """
         Load parameters from existing override file
@@ -410,6 +492,7 @@ class WorkflowRegistry:
             workflow_name: Name of the workflow
             workflow_data: Parsed workflow JSON (for output detection)
             override_data: Parsed override JSON
+            ui_metadata: UI metadata from workflow file (always use this, not from override)
         """
         parameters = [
             WorkflowParameter(**param_data)
@@ -419,12 +502,13 @@ class WorkflowRegistry:
         # Detect workflow output
         output = self._detect_output(workflow_data)
 
-        # Store in registry
+        # Store in registry (ui_metadata comes from workflow file, not override)
         self.workflows[workflow_name] = WorkflowInfo(
             name=workflow_name,
             parameters=parameters,
             output=output,
-            description=override_data.get("description", "")
+            description=override_data.get("description", ""),
+            ui_metadata=ui_metadata,
         )
 
         logger.info(f"  Loaded {len(parameters)} parameters from override file")

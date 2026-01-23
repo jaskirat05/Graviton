@@ -198,6 +198,7 @@ async def publish_step_completed_activity(
     step_id: str,
     chain_name: Optional[str] = None,
     chain_version: int = 1,
+    artifact_id: Optional[str] = None,
 ) -> None:
     """
     Activity: Publish step_completed event to Redis
@@ -207,18 +208,20 @@ async def publish_step_completed_activity(
         step_id: Step ID that completed
         chain_name: Chain name for logging
         chain_version: Chain version for logging
+        artifact_id: Optional artifact ID for the step output
     """
     log = _get_log_func(chain_name, chain_version, chain_id)
     try:
-        await publish_chain_event(
-            chain_id=chain_id,
-            event={
-                "type": "step_completed",
-                "chain_id": chain_id,
-                "step_id": step_id,
-            }
-        )
-        log(f"Published step_completed event for {step_id} in chain {chain_id}")
+        event = {
+            "type": "step_completed",
+            "chain_id": chain_id,
+            "step_id": step_id,
+        }
+        if artifact_id:
+            event["artifact_id"] = artifact_id
+
+        await publish_chain_event(chain_id=chain_id, event=event)
+        log(f"Published step_completed event for {step_id} in chain {chain_id} (artifact: {artifact_id})")
     except Exception as e:
         log(f"Failed to publish step_completed event: {e}", "error")
         # Don't fail workflow for event publish failures

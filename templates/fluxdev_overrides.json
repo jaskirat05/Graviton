@@ -147,5 +147,19 @@
       "description": "guidance parameter for FluxGuidance",
       "category": "other"
     }
-  ]
+  ],
+  "ui_metadata": {
+    "nodeType": "image_generate",
+    "label": "Flux Dev",
+    "icon": "🖼️",
+    "color": "#22c55e",
+    "category": "image",
+    "outputSockets": [
+      {
+        "id": "image",
+        "type": "image",
+        "label": "Image"
+      }
+    ]
+  }
 }

@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional
 import json
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -36,6 +37,15 @@ from core.services.broadcast import get_broadcast, connect_broadcast, disconnect
 from core.observability.chain_logger import ChainLogger
 
 app = FastAPI(title="ComfyAutomate Temporal Gateway", version="2.0.0")
+
+# CORS middleware for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include routers
 app.include_router(approval_router)
@@ -290,6 +300,59 @@ async def health_check():
         "temporal_connected": temporal_client is not None,
         "version": "2.0.0-temporal"
     }
+
+
+@app.get("/node-definitions")
+async def get_node_definitions():
+    """
+    Get all workflow definitions for the frontend node editor.
+    Returns UI metadata + overridable parameters for each workflow.
+    """
+    from dataclasses import asdict
+
+    workflows = []
+    for name, info in workflow_registry.workflows.items():
+        # Skip workflows without UI metadata
+        if not info.ui_metadata:
+            continue
+
+        ui = info.ui_metadata
+
+        # Derive inputSockets from parameters with input_key containing "image" or "video"
+        input_sockets = []
+        for p in info.parameters:
+            if "image" in p.input_key.lower() or "video" in p.input_key.lower():
+                # Determine socket type from input_key
+                socket_type = "video" if "video" in p.input_key.lower() else "image"
+                input_sockets.append({
+                    "id": p.key,  # Use full key (e.g. "78.image") for uniqueness
+                    "type": socket_type,
+                    "label": p.node_title,  # Use node title as label
+                })
+
+        workflows.append({
+            "workflow_name": name,
+            "nodeType": ui.nodeType,
+            "label": ui.label,
+            "icon": ui.icon,
+            "color": ui.color,
+            "category": ui.category,
+            "inputSockets": input_sockets,
+            "outputSockets": [asdict(s) for s in ui.outputSockets],
+            "parameters": [
+                {
+                    "key": p.key,
+                    "input_key": p.input_key,
+                    "default_value": p.default_value,
+                    "type": p.type,
+                    "description": p.description,
+                    "category": p.category,
+                }
+                for p in info.parameters
+            ],
+        })
+
+    return workflows
 
 
 # ============================================================================

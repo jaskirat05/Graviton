@@ -14,7 +14,7 @@ steps:
     max_retries: 2
     timeout_action: auto_reject
   parameters:
-    1.video: ComfyUI_000fdafd12_.mp4
+    1.video: ComfyUI_00012_.mp4
     1.select_every_nth: 1
     1.skip_first_frames: 0
     1.frame_load_cap: 1
@@ -22,7 +22,7 @@ steps:
   workflow: imageSave
   description: Extract frame after skipping 172 frames
   parameters:
-    1.video: ComfyUI_0001fdafdaf2_.mp4
+    1.video: ComfyUI_00012_.mp4
     1.select_every_nth: 1
     1.skip_first_frames: 172
     1.frame_load_cap: 1
@@ -53,7 +53,7 @@ steps:
     timeout_action: auto_reject
   parameters:
     78.image: '{{ extract_frame2.output.image }}'
-    111.prompt: Make the scene more vibrant and colorful with enhanced details
+    111.prompt: Make the person drink from a water bottle
 - id: create_video
   workflow: firstEndTovideo
   description: Create video transitioning from first to last edited frame

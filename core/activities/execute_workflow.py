@@ -64,6 +64,9 @@ async def execute_and_track_workflow(
     client = ComfyUIClient(server_address, chain_logger=chain_logger)
 
     try:
+        # Track last known node for progress-only updates
+        last_node_id = [None]  # Use list to allow mutation in closure
+
         # Progress callback to send heartbeats and publish events
         async def on_progress_async(update):
             try:
@@ -74,14 +77,20 @@ async def execute_and_track_workflow(
             except Exception:
                 pass
 
-            # Publish node execution event
-            if chain_id and step_id and update.current_node:
-                await publish_chain_event(chain_id, {
-                    "type": "step_node",
-                    "step_id": step_id,
-                    "node_id": update.current_node,
-                    "progress": update.progress,
-                })
+            # Track current node for progress-only updates
+            if update.current_node:
+                last_node_id[0] = update.current_node
+
+            # Publish node execution event (for new node or progress update)
+            if chain_id and step_id:
+                node_id = update.current_node or last_node_id[0]
+                if node_id or update.progress > 0:
+                    await publish_chain_event(chain_id, {
+                        "type": "step_node",
+                        "step_id": step_id,
+                        "node_id": node_id,
+                        "progress": update.progress,
+                    })
 
         # Sync wrapper for callback
         import asyncio

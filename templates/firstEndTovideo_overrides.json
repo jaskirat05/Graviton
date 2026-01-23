@@ -488,5 +488,19 @@
       "description": "strength_model parameter for LoraLoaderModelOnly",
       "category": "models"
     }
-  ]
+  ],
+  "ui_metadata": {
+    "nodeType": "image_to_video",
+    "label": "First End To Video",
+    "icon": "🎬",
+    "color": "#3b82f6",
+    "category": "video",
+    "outputSockets": [
+      {
+        "id": "video",
+        "type": "video",
+        "label": "Video"
+      }
+    ]
+  }
 }

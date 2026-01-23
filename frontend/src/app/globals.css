@@ -1,0 +1,165 @@
+@import "tailwindcss";
+
+/**
+ * Color tokens - inspired by SimStudio
+ * Dark mode focused for ComfyAutomate
+ */
+:root {
+  /* Surface colors */
+  --bg: #1b1b1b;
+  --surface-1: #1e1e1e;
+  --surface-2: #232323;
+  --surface-3: #242424;
+  --surface-4: #292929;
+  --surface-5: #363636;
+  --surface-6: #454545;
+
+  /* Borders */
+  --border: #2c2c2c;
+  --border-1: #3d3d3d;
+  --border-muted: #424242;
+  --divider: #393939;
+
+  /* Text colors */
+  --text-primary: #e6e6e6;
+  --text-secondary: #cccccc;
+  --text-tertiary: #b3b3b3;
+  --text-muted: #787878;
+  --text-error: #ef4444;
+
+  /* Workflow specific */
+  --workflow-edge: #454545;
+  --workflow-edge-hover: #666666;
+
+  /* Brand colors */
+  --brand-primary: #8357ff;
+  --brand-secondary: #33b4ff;
+  --brand-success: #22c55e;
+  --brand-warning: #f59e0b;
+  --brand-error: #ef4444;
+
+  /* Node colors */
+  --node-image: #22c55e;
+  --node-video: #3b82f6;
+  --node-audio: #f59e0b;
+  --node-text: #8b5cf6;
+
+  /* Scrollbar */
+  --scrollbar-size: 8px;
+  --radius: 8px;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text-primary);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  overscroll-behavior: none;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #5a5a5a;
+  border-radius: var(--radius);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #6a6a6a;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #5a5a5a transparent;
+}
+
+/* ReactFlow customization */
+.react-flow__background {
+  background-color: var(--bg) !important;
+}
+
+.react-flow__pane {
+  cursor: grab;
+}
+
+.react-flow__pane:active {
+  cursor: grabbing;
+}
+
+.react-flow__selection {
+  background: rgba(51, 180, 255, 0.08) !important;
+  border: 1px solid var(--brand-secondary) !important;
+}
+
+.react-flow__edge-path {
+  stroke: var(--workflow-edge);
+  stroke-width: 2;
+}
+
+.react-flow__edge-path:hover {
+  stroke: var(--workflow-edge-hover);
+}
+
+.react-flow__handle {
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
+  background: var(--workflow-edge) !important;
+  border: 3px solid var(--surface-2) !important;
+  cursor: crosshair !important;
+  z-index: 10 !important;
+}
+
+.react-flow__handle:hover {
+  background: var(--brand-secondary) !important;
+  transform: scale(1.2);
+}
+
+.react-flow__handle-left {
+  left: -7px !important;
+}
+
+.react-flow__handle-right {
+  right: -7px !important;
+}
+
+/* Connection line while dragging */
+.react-flow__connection-line {
+  stroke: var(--brand-secondary) !important;
+  stroke-width: 2 !important;
+}
+
+/* Make connection line more visible */
+.react-flow__connectionline {
+  z-index: 1000 !important;
+}
+
+/* Edge styling */
+.react-flow__edge-path {
+  stroke: var(--workflow-edge) !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--brand-secondary) !important;
+}
