@@ -28,6 +28,7 @@ with job.unsafe.imports_passed_through():
         publish_step_completed_activity,
         create_approval_request_activity,
         upload_local_inputs,
+        save_executed_definition_activity,
     )
 
 
@@ -43,6 +44,7 @@ class ChainExecutionRequest:
         chain_version: Chain version number (for logging)
         cached_results: Previously completed step results to reuse (for retry chains)
         retry_number: Retry attempt number (0 for original, 1+ for retries)
+        level_wait_seconds: Seconds to wait between execution levels (0-300)
     """
     graph: ExecutionGraph
     initial_parameters: Optional[Dict[str, Any]] = None
@@ -50,6 +52,7 @@ class ChainExecutionRequest:
     chain_version: int = 1  # Chain version number (for logging)
     cached_results: Optional[Dict[str, StepResult]] = None  # step_id -> StepResult
     retry_number: int = 0  # Track retry count
+    level_wait_seconds: int = 0  # Wait between levels (0-300)
 
 
 @job.defn
@@ -84,6 +87,9 @@ class ChainExecutorWorkflow:
         self.approval_parameters = {}  # step_id -> new params
         self.approval_comments = {}  # step_id -> comment
 
+        # Level wait state
+        self._skip_level_wait = {}  # level_num -> bool (signal to skip wait early)
+
     @job.run
     async def run(self, request: ChainExecutionRequest) -> ChainExecutionResult:
         """
@@ -98,11 +104,14 @@ class ChainExecutorWorkflow:
         graph = request.graph
         cached_results = request.cached_results or {}
         retry_number = request.retry_number
+        level_wait_seconds = request.level_wait_seconds
 
         job.logger.info(f"Starting chain execution: {graph.chain_name}")
         job.logger.info(f"Retry number: {retry_number}")
         job.logger.info(f"Cached steps: {list(cached_results.keys())}")
         job.logger.info(f"Total levels: {len(graph.get_execution_levels())}")
+        if level_wait_seconds > 0:
+            job.logger.info(f"Level wait: {level_wait_seconds}s between levels")
 
         try:
             # Apply cached results to graph
@@ -135,6 +144,7 @@ class ChainExecutorWorkflow:
 
             # Execute each level sequentially
             execution_levels = graph.get_execution_levels()
+            total_levels = len(execution_levels)
             for level_num, level_steps in enumerate(execution_levels):
                 self._current_level = level_num
                 self._status = f"executing_level_{level_num}"
@@ -177,6 +187,22 @@ class ChainExecutorWorkflow:
                             node.status = result.status
                             node.skipped_reason = result.skipped_reason
 
+                # Wait between levels (except after final level)
+                is_final_level = (level_num == total_levels - 1)
+                if level_wait_seconds > 0 and not is_final_level:
+                    job.logger.info(f"Waiting {level_wait_seconds}s after level {level_num}")
+                    try:
+                        # Wait for skip signal or timeout (same pattern as approval wait)
+                        await job.wait_condition(
+                            lambda ln=level_num: ln in self._skip_level_wait,
+                            timeout=timedelta(seconds=level_wait_seconds)
+                        )
+                        # Signal received to skip wait
+                        job.logger.info(f"Level {level_num} wait skipped via signal")
+                    except TimeoutError:
+                        # Normal case - timeout means wait completed
+                        job.logger.info(f"Level {level_num} wait completed")
+
             # All levels complete
             self._status = "completed"
 
@@ -188,6 +214,19 @@ class ChainExecutorWorkflow:
                     "completed",
                     None,  # current_level
                     None,  # error_message
+                    self._graph.chain_name,
+                    self._chain_version,
+                ],
+                start_to_close_timeout=timedelta(seconds=10)
+            )
+
+            # Save executed definition (with actual parameters used)
+            executed_definition = self._build_executed_definition()
+            await job.execute_activity(
+                save_executed_definition_activity,
+                args=[
+                    self._chain_id,
+                    executed_definition,
                     self._graph.chain_name,
                     self._chain_version,
                 ],
@@ -494,24 +533,45 @@ class ChainExecutorWorkflow:
             start_to_close_timeout=timedelta(seconds=30)
         )
 
-        # Select server
-        target_server = await job.execute_activity(
-            select_best_server,
-            args=[
-                "least_loaded",
-                self._graph.chain_name,
-                self._chain_version,
-                self._chain_id,
-            ],
-            start_to_close_timeout=timedelta(seconds=30),
-            retry_policy=RetryPolicy(
-                maximum_attempts=3,
-                initial_interval=timedelta(seconds=1),
-                maximum_interval=timedelta(seconds=10),
-                backoff_coefficient=2.0
+        # Select server - use user-specified server or fall back to load balancing
+        if node.target_server:
+            # User specified a server - look up its URL from ServerRegistry
+            target_server = await job.execute_activity(
+                select_best_server,
+                args=[
+                    "specific",  # Strategy to select specific server
+                    self._graph.chain_name,
+                    self._chain_version,
+                    self._chain_id,
+                    node.target_server,  # Server name
+                ],
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=RetryPolicy(
+                    maximum_attempts=3,
+                    initial_interval=timedelta(seconds=1),
+                    maximum_interval=timedelta(seconds=10),
+                    backoff_coefficient=2.0
+                )
             )
-        )
-        job.logger.info(f"Step {step_id}: Server {target_server}")
+            job.logger.info(f"Step {step_id}: Using user-specified server {node.target_server} ({target_server})")
+        else:
+            target_server = await job.execute_activity(
+                select_best_server,
+                args=[
+                    "least_loaded",
+                    self._graph.chain_name,
+                    self._chain_version,
+                    self._chain_id,
+                ],
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=RetryPolicy(
+                    maximum_attempts=3,
+                    initial_interval=timedelta(seconds=1),
+                    maximum_interval=timedelta(seconds=10),
+                    backoff_coefficient=2.0
+                )
+            )
+            job.logger.info(f"Step {step_id}: Server {target_server} (load balanced)")
 
         # Upload inputs if needed
         await self._upload_inputs_if_needed(step_id, target_server)
@@ -798,6 +858,56 @@ class ChainExecutorWorkflow:
         self.approval_parameters[step_id] = parameters or {}
         self.approval_comments[step_id] = comment
 
+    @job.signal
+    async def update_step_parameters_signal(self, signal_data: dict):
+        """
+        Signal handler to update parameters for a step that hasn't executed yet.
+
+        Args:
+            signal_data: Dict containing:
+                - step_id: Step to update
+                - parameters: New parameters to merge
+        """
+        step_id = signal_data.get("step_id")
+        parameters = signal_data.get("parameters", {})
+
+        # Only update if step hasn't executed yet
+        if step_id in self._step_results:
+            job.logger.warning(f"Step {step_id} already executed, ignoring parameter update")
+            return
+
+        # Update the node's parameters directly
+        node = self._graph.get_node(step_id)
+        if node:
+            node.parameters.update(parameters)
+            job.logger.info(f"Step {step_id}: Updated parameters: {list(parameters.keys())}")
+        else:
+            job.logger.warning(f"Step {step_id} not found in graph")
+
+    @job.signal
+    async def skip_level_wait_signal(self, signal_data: dict):
+        """
+        Signal handler to skip the current level wait early.
+
+        Args:
+            signal_data: Dict containing:
+                - level_num: Level number to skip wait for (optional, defaults to current)
+        """
+        level_num = signal_data.get("level_num", self._current_level)
+        self._skip_level_wait[level_num] = True
+        job.logger.info(f"Level {level_num} wait will be skipped")
+
+    @job.query
+    def get_pending_steps(self) -> List[str]:
+        """
+        Query step IDs that haven't executed yet (can have params updated).
+
+        Returns:
+            List of step IDs that are pending execution
+        """
+        all_steps = [node.step_id for node in self._graph.nodes.values()]
+        return [s for s in all_steps if s not in self._step_results]
+
     @job.query
     def get_status(self) -> Dict[str, Any]:
         """
@@ -814,4 +924,34 @@ class ChainExecutorWorkflow:
                 step_id: result.status
                 for step_id, result in self._step_results.items()
             }
+        }
+
+    def _build_executed_definition(self) -> Dict[str, Any]:
+        """
+        Build the executed definition from the graph with actual parameters used.
+
+        This captures the final state after all parameter updates during execution.
+
+        Returns:
+            Chain definition dict with actual executed parameters
+        """
+        steps = []
+        for step_id, node in self._graph.nodes.items():
+            step = {
+                "id": step_id,
+                "workflow": node.workflow,
+                "parameters": node.parameters,  # Actual parameters (may have been updated via signal)
+            }
+            if node.dependencies:
+                step["depends_on"] = node.dependencies
+            if node.condition:
+                step["condition"] = node.condition
+            if node.requires_approval:
+                step["approval"] = node.approval_config
+
+            steps.append(step)
+
+        return {
+            "name": self._graph.chain_name,
+            "steps": steps,
         }

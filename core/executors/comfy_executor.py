@@ -189,10 +189,20 @@ class ComfyUIWorkflow:
 
                 # Detect type from file extension
                 ext = primary_file.rsplit(".", 1)[-1].lower() if "." in primary_file else ""
-                output_type = "video" if ext in ("mp4", "webm", "mov", "avi") else "image"
+
+                # Determine output type based on extension
+                if ext in ("mp4", "webm", "mov", "avi", "mkv"):
+                    output_type = "video"
+                elif ext in ("mp3", "wav", "flac", "ogg", "aac", "m4a"):
+                    output_type = "audio"
+                elif ext in ("obj", "fbx", "gltf", "glb", "stl", "ply", "usdz"):
+                    output_type = "3d"
+                else:
+                    output_type = "image"
 
                 output_data = {
-                    output_type: primary_file,  # "video": "output.mp4" or "image": "output.png"
+                    "output": primary_file,  # Generic key for chain templates: {{ step.output.output }}
+                    output_type: primary_file,  # Type-specific key: "video", "audio", "3d", or "image"
                     "type": output_type,
                     "files": [f["original_filename"] for f in downloaded_files],
                     "count": len(downloaded_files)
@@ -211,15 +221,35 @@ class ComfyUIWorkflow:
 
         except Exception as e:
             self._status = "failed"
-            self._error = {"message": str(e), "type": type(e).__name__}
-            workflow.logger.error(f"Workflow failed with error: {e}")
+
+            # Extract the original error message from Temporal's wrapped exceptions
+            # Chain: ActivityError -> ApplicationError (contains original message)
+            # We need to traverse to the innermost cause to get the real error
+            error_message = str(e)
+
+            # First, traverse to the innermost exception in the cause chain
+            innermost = e
+            while True:
+                next_cause = getattr(innermost, 'cause', None) or getattr(innermost, '__cause__', None)
+                if next_cause is None:
+                    break
+                innermost = next_cause
+
+            # Get message from the innermost exception (ApplicationError.message)
+            if hasattr(innermost, 'message') and innermost.message:
+                error_message = innermost.message
+            elif hasattr(innermost, 'args') and innermost.args:
+                error_message = str(innermost.args[0])
+
+            self._error = {"message": error_message, "type": type(e).__name__}
+            workflow.logger.error(f"Workflow failed with error: {error_message}")
 
             return WorkflowExecutionResult(
                 status="failed",
                 prompt_id=self._prompt_id or "",
                 server_address=self._server_address or "",
                 local_preview=[],
-                error=str(e)
+                error=error_message
             )
 
     @workflow.query

@@ -13,6 +13,23 @@ import type {
 import type { useNodeStore } from "@/stores/nodeStore";
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+/**
+ * Sanitize a string for use as a step ID
+ * Step IDs must be alphanumeric with underscores or hyphens only
+ */
+export function sanitizeStepId(name: string): string {
+  return name
+    .replace(/[()]/g, '')           // Remove parentheses
+    .replace(/\s+/g, '_')           // Replace spaces with underscores
+    .replace(/[^a-zA-Z0-9_-]/g, '') // Remove any other invalid chars
+    .replace(/_+/g, '_')            // Collapse multiple underscores
+    .replace(/^_|_$/g, '');         // Trim leading/trailing underscores
+}
+
+// =============================================================================
 // Export: ReactFlow State -> Chain Definition
 // =============================================================================
 
@@ -49,6 +66,7 @@ export function toChainDefinition(
       workflow: data.type, // type IS the workflow name
       ...(dependencies.length > 0 && { depends_on: dependencies }),
       parameters,
+      ...(data.server && { server: data.server }), // Include server if specified
       position: { x: node.position.x, y: node.position.y },
     };
   });
@@ -136,10 +154,10 @@ export function fromChainDefinition(
       data: {
         type: step.workflow, // workflow name is the type
         label: definition.label,
-        icon: definition.icon,
         color: definition.color,
         parameters,
         definition,
+        ...(step.server && { server: step.server }), // Include server if specified
       },
     };
 

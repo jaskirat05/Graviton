@@ -1,14 +1,14 @@
 {
-  "workflow_hash": "sha256:66417df83a97eb60d0c0b96c0721169c7cabee4689c5f0980a840cf4033e58e9",
-  "generated_at": "2026-01-25T01:24:11.418007Z",
-  "workflow_name": "imageSave",
+  "workflow_hash": "sha256:af6daae13f9d123b0b5b5a2b577badabec929c129de2f16e3d03c2f87727788d",
+  "generated_at": "2026-01-25T01:24:11.435722Z",
+  "workflow_name": "videoToImages",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
     {
-      "key": "1.video",
-      "node_id": "1",
+      "key": "3.video",
+      "node_id": "3",
       "input_key": "video",
-      "default_value": "ComfyUI_00012_.mp4",
+      "default_value": "ComfyUI_00013_.mp4",
       "type": "str",
       "node_class": "VHS_LoadVideo",
       "node_title": "Load Video (Upload) 🎥🅥🅗🅢",
@@ -16,8 +16,8 @@
       "category": "media"
     },
     {
-      "key": "1.force_rate",
-      "node_id": "1",
+      "key": "3.force_rate",
+      "node_id": "3",
       "input_key": "force_rate",
       "default_value": 0,
       "type": "int",
@@ -27,8 +27,8 @@
       "category": "other"
     },
     {
-      "key": "1.custom_width",
-      "node_id": "1",
+      "key": "3.custom_width",
+      "node_id": "3",
       "input_key": "custom_width",
       "default_value": 0,
       "type": "int",
@@ -38,10 +38,10 @@
       "category": "other"
     },
     {
-      "key": "1.custom_height",
-      "node_id": "1",
+      "key": "3.custom_height",
+      "node_id": "3",
       "input_key": "custom_height",
-      "default_value": 512,
+      "default_value": 0,
       "type": "int",
       "node_class": "VHS_LoadVideo",
       "node_title": "Load Video (Upload) 🎥🅥🅗🅢",
@@ -49,8 +49,8 @@
       "category": "other"
     },
     {
-      "key": "1.frame_load_cap",
-      "node_id": "1",
+      "key": "3.frame_load_cap",
+      "node_id": "3",
       "input_key": "frame_load_cap",
       "default_value": 0,
       "type": "int",
@@ -60,8 +60,8 @@
       "category": "other"
     },
     {
-      "key": "1.skip_first_frames",
-      "node_id": "1",
+      "key": "3.skip_first_frames",
+      "node_id": "3",
       "input_key": "skip_first_frames",
       "default_value": 0,
       "type": "int",
@@ -71,8 +71,8 @@
       "category": "other"
     },
     {
-      "key": "1.select_every_nth",
-      "node_id": "1",
+      "key": "3.select_every_nth",
+      "node_id": "3",
       "input_key": "select_every_nth",
       "default_value": 1,
       "type": "int",
@@ -82,8 +82,8 @@
       "category": "other"
     },
     {
-      "key": "1.format",
-      "node_id": "1",
+      "key": "3.format",
+      "node_id": "3",
       "input_key": "format",
       "default_value": "AnimateDiff",
       "type": "str",
@@ -93,22 +93,44 @@
       "category": "other"
     },
     {
-      "key": "2.filename_prefix",
-      "node_id": "2",
+      "key": "4.filename_prefix",
+      "node_id": "4",
       "input_key": "filename_prefix",
       "default_value": "ComfyUI",
       "type": "str",
-      "node_class": "SaveImage",
-      "node_title": "Save Image",
-      "description": "filename_prefix parameter for SaveImage",
+      "node_class": "SaveImageKJ",
+      "node_title": "Save Image KJ",
+      "description": "filename_prefix parameter for SaveImageKJ",
+      "category": "other"
+    },
+    {
+      "key": "4.output_folder",
+      "node_id": "4",
+      "input_key": "output_folder",
+      "default_value": "output",
+      "type": "str",
+      "node_class": "SaveImageKJ",
+      "node_title": "Save Image KJ",
+      "description": "output_folder parameter for SaveImageKJ",
+      "category": "other"
+    },
+    {
+      "key": "4.caption_file_extension",
+      "node_id": "4",
+      "input_key": "caption_file_extension",
+      "default_value": ".txt",
+      "type": "str",
+      "node_class": "SaveImageKJ",
+      "node_title": "Save Image KJ",
+      "description": "caption_file_extension parameter for SaveImageKJ",
       "category": "other"
     }
   ],
   "ui_metadata": {
-    "nodeType": "workflow_imageSave",
-    "label": "Imagesave",
+    "nodeType": "workflow_videoToImages",
+    "label": "Videotoimages",
     "icon": "video",
-    "color": "#f97316",
+    "color": "#f43f5e",
     "category": "video",
     "outputSockets": [
       {

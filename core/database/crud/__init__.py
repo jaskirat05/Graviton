@@ -11,6 +11,7 @@ from .chain import (
     update_chain_status,
     list_chains,
     delete_chain,
+    save_executed_definition,
 )
 
 from .workflow import (
@@ -69,6 +70,7 @@ __all__ = [
     "update_chain_status",
     "list_chains",
     "delete_chain",
+    "save_executed_definition",
     # Workflow
     "create_workflow",
     "get_workflow",

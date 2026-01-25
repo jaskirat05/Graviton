@@ -1,9 +1,9 @@
 {
   "3": {
     "inputs": {
-      "seed": 857953892217130,
-      "steps": 4,
-      "cfg": 1,
+      "seed": 976480016588017,
+      "steps": 20,
+      "cfg": 2.5,
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 1,
@@ -116,7 +116,7 @@
   },
   "76": {
     "inputs": {
-      "prompt": "Put the cartoon as a logo on bottle with brand name hippo the great",
+      "prompt": "make this image more dramatic, preserve the layout",
       "clip": [
         "38",
         0
@@ -158,7 +158,7 @@
   },
   "78": {
     "inputs": {
-      "image": "ComfyUI_00193_.png"
+      "image": "Qwen-Image_00043_.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -200,49 +200,13 @@
       "upscale_method": "lanczos",
       "megapixels": 1,
       "image": [
-        "103",
+        "78",
         0
       ]
     },
     "class_type": "ImageScaleToTotalPixels",
     "_meta": {
       "title": "Scale Image to Total Pixels"
-    }
-  },
-  "101": {
-    "inputs": {
-      "image": "00000-1679839837.png"
-    },
-    "class_type": "LoadImage",
-    "_meta": {
-      "title": "Load Image"
-    }
-  },
-  "102": {
-    "inputs": {},
-    "class_type": "ConditioningCombine",
-    "_meta": {
-      "title": "Conditioning (Combine)"
-    }
-  },
-  "103": {
-    "inputs": {
-      "direction": "right",
-      "match_image_size": true,
-      "spacing_width": 0,
-      "spacing_color": "white",
-      "image1": [
-        "78",
-        0
-      ],
-      "image2": [
-        "101",
-        0
-      ]
-    },
-    "class_type": "ImageStitch",
-    "_meta": {
-      "title": "Image Stitch"
     }
   }
 }

@@ -43,6 +43,7 @@ class ChainStepDefinition(BaseModel):
         description: Optional human-readable description
         requires_approval: Whether this step requires approval before proceeding
         approval: Approval configuration (timeout, retry policy, etc.)
+        server: Optional server name to execute on (if not provided, uses workflow's validated servers or load balancer)
     """
     id: str = Field(..., description="Unique step identifier")
     workflow: str = Field(..., description="Workflow name to execute")
@@ -52,6 +53,7 @@ class ChainStepDefinition(BaseModel):
     description: Optional[str] = Field(None, description="Step description")
     requires_approval: bool = Field(False, description="Whether approval is required")
     approval: Dict[str, Any] = Field(default_factory=dict, description="Approval configuration")
+    server: Optional[str] = Field(None, description="Server name to execute on (optional)")
 
     @validator('id')
     def validate_id(cls, v):

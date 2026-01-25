@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ComfyAutomate - Chain Editor",
+  title: "Graviton",
   description: "Visual editor for ComfyUI workflow chains",
 };
 

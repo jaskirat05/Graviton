@@ -38,7 +38,8 @@ class ChainEngine:
         self,
         graph: ExecutionGraph,
         chain_definition: Optional[Dict[str, Any]] = None,
-        initial_parameters: Optional[Dict[str, Any]] = None
+        initial_parameters: Optional[Dict[str, Any]] = None,
+        level_wait_seconds: int = 0,
     ) -> Dict[str, str]:
         """
         Start chain execution
@@ -106,6 +107,7 @@ class ChainEngine:
                 initial_parameters=initial_parameters,
                 chain_id=chain_id,
                 chain_version=chain_version,
+                level_wait_seconds=level_wait_seconds,
             ),
             id=job_id,
             task_queue="comfyui-gpu-farm"
@@ -157,6 +159,7 @@ class ChainEngine:
         new_parameters: Dict[str, Any],
         chain_definition: Optional[Dict[str, Any]] = None,
         definition_hash: Optional[str] = None,
+        level_wait_seconds: int = 0,
     ) -> Dict[str, str]:
         """
         Regenerate chain from a specific step with new parameters
@@ -234,6 +237,7 @@ class ChainEngine:
                 cached_results=cache,
                 chain_id=chain_id,
                 chain_version=chain_version,
+                level_wait_seconds=level_wait_seconds,
             ),
             id=job_id,
             task_queue="comfyui-gpu-farm"

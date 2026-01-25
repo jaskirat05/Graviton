@@ -244,7 +244,7 @@
   },
   "86": {
     "inputs": {
-      "vae_name": "Wan\\wan_2.1_vae.safetensors"
+      "vae_name": "wan_2.1_vae.safetensors"
     },
     "class_type": "VAELoader",
     "_meta": {

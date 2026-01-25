@@ -1,6 +1,6 @@
 {
-  "workflow_hash": "sha256:aaea53e2f1f22cd1fc59e3017ebcd1654aeab7ac5b555a28ec1254d5aa65eca0",
-  "generated_at": "2025-12-27T03:50:15.642393Z",
+  "workflow_hash": "sha256:2dfbe149659e622237580bfff120f0667ca580457b0cfe0079b3405a465c15fc",
+  "generated_at": "2026-01-25T01:24:11.368044Z",
   "workflow_name": "video_wan2_2_14B_fun_camera_test",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
@@ -393,7 +393,7 @@
       "key": "86.vae_name",
       "node_id": "86",
       "input_key": "vae_name",
-      "default_value": "Wan\\wan_2.1_vae.safetensors",
+      "default_value": "wan_2.1_vae.safetensors",
       "type": "str",
       "node_class": "VAELoader",
       "node_title": "Load VAE",
@@ -543,5 +543,19 @@
       "description": "strength_model parameter for LoraLoaderModelOnly",
       "category": "models"
     }
-  ]
+  ],
+  "ui_metadata": {
+    "nodeType": "workflow_video_wan2_2_14B_fun_camera_test",
+    "label": "Video Wan2 2 14B Fun Camera Test",
+    "icon": "video",
+    "color": "#0ea5e9",
+    "category": "video",
+    "outputSockets": [
+      {
+        "id": "output",
+        "type": "video",
+        "label": "Video"
+      }
+    ]
+  }
 }

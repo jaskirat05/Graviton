@@ -94,6 +94,7 @@ def create_execution_graph(chain: ChainDefinition) -> ExecutionGraph:
             requires_approval=step.requires_approval or False,
             approval_config=step.approval or {},
             condition=step.condition,
+            target_server=step.server,  # User-specified server (optional)
             status="pending"
         )
         graph.add_node(node)

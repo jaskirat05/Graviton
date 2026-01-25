@@ -52,7 +52,8 @@ class Chain(Base):
 
     # Results
     error_message = Column(Text)
-    chain_definition = Column(JSON)  # Full chain YAML as JSON
+    chain_definition = Column(JSON)  # Original chain definition (immutable)
+    executed_definition = Column(JSON)  # Final definition with actual executed parameters
 
     # Metadata
     created_at = Column(DateTime, default=func.now())

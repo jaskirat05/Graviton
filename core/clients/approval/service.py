@@ -7,7 +7,7 @@ Handles approval operations including parameter validation and Temporal signalin
 from typing import Dict, Any, List, Optional, Tuple
 from temporalio.client import Client
 
-from core.registry import get_registry
+from core.workflow_registry import get_registry
 from core.database.crud.approval import (
     get_approval_request_by_token,
     approve_approval_request,

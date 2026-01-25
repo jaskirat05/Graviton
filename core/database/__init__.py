@@ -14,6 +14,7 @@ from .crud import (
     update_chain_status,
     list_chains,
     delete_chain,
+    save_executed_definition,
     # Workflow
     create_workflow,
     get_workflow,
@@ -62,6 +63,7 @@ __all__ = [
     "update_chain_status",
     "list_chains",
     "delete_chain",
+    "save_executed_definition",
     # Workflow CRUD
     "create_workflow",
     "get_workflow",

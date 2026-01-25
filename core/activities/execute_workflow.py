@@ -188,7 +188,15 @@ async def execute_and_track_workflow(
             except Exception as pub_err:
                 log(f"Step {step_id}: Failed to publish failure event: {pub_err}", "warning")
 
-        raise  # Re-raise to fail the activity
+        # Build structured error message for database storage
+        # Format: JSON with error_type, message, and node_errors for frontend parsing
+        structured_error = {
+            "type": "validation_error",
+            "error_type": error_type,
+            "message": error_message,
+            "node_errors": node_errors,
+        }
+        raise Exception(json.dumps(structured_error))
 
     except Exception as e:
         # Any other unexpected error

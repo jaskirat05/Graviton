@@ -1,14 +1,14 @@
 {
-  "workflow_hash": "sha256:e568d8818100794a67537d5aca4834fdd38cffeb24c93541e20c1c4b270febd6",
-  "generated_at": "2026-01-25T01:24:11.385557Z",
-  "workflow_name": "qwen_image_edit",
+  "workflow_hash": "sha256:0c2c79ac69701d2bb1bbad004f2d4e71a53c017829961e94587d3f35de46cd01",
+  "generated_at": "2026-01-25T01:24:11.350959Z",
+  "workflow_name": "image_qwen_image_edit",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
     {
       "key": "3.seed",
       "node_id": "3",
       "input_key": "seed",
-      "default_value": 724723345395306,
+      "default_value": 976480016588017,
       "type": "int",
       "node_class": "KSampler",
       "node_title": "KSampler",
@@ -19,7 +19,7 @@
       "key": "3.steps",
       "node_id": "3",
       "input_key": "steps",
-      "default_value": 4,
+      "default_value": 20,
       "type": "int",
       "node_class": "KSampler",
       "node_title": "KSampler",
@@ -30,8 +30,8 @@
       "key": "3.cfg",
       "node_id": "3",
       "input_key": "cfg",
-      "default_value": 1,
-      "type": "int",
+      "default_value": 2.5,
+      "type": "float",
       "node_class": "KSampler",
       "node_title": "KSampler",
       "description": "Classifier-free guidance scale",
@@ -170,10 +170,32 @@
       "category": "other"
     },
     {
+      "key": "76.prompt",
+      "node_id": "76",
+      "input_key": "prompt",
+      "default_value": "make this image more dramatic, preserve the layout",
+      "type": "str",
+      "node_class": "TextEncodeQwenImageEdit",
+      "node_title": "TextEncodeQwenImageEdit",
+      "description": "prompt parameter for TextEncodeQwenImageEdit",
+      "category": "prompts"
+    },
+    {
+      "key": "77.prompt",
+      "node_id": "77",
+      "input_key": "prompt",
+      "default_value": "",
+      "type": "str",
+      "node_class": "TextEncodeQwenImageEdit",
+      "node_title": "TextEncodeQwenImageEdit",
+      "description": "prompt parameter for TextEncodeQwenImageEdit",
+      "category": "prompts"
+    },
+    {
       "key": "78.image",
       "node_id": "78",
       "input_key": "image",
-      "default_value": "0_2 (12).png",
+      "default_value": "Qwen-Image_00043_.png",
       "type": "str",
       "node_class": "LoadImage",
       "node_title": "Load Image",
@@ -223,68 +245,13 @@
       "node_title": "Scale Image to Total Pixels",
       "description": "megapixels parameter for ImageScaleToTotalPixels",
       "category": "other"
-    },
-    {
-      "key": "110.prompt",
-      "node_id": "110",
-      "input_key": "prompt",
-      "default_value": "",
-      "type": "str",
-      "node_class": "TextEncodeQwenImageEditPlus",
-      "node_title": "TextEncodeQwenImageEditPlus",
-      "description": "prompt parameter for TextEncodeQwenImageEditPlus",
-      "category": "prompts"
-    },
-    {
-      "key": "111.prompt",
-      "node_id": "111",
-      "input_key": "prompt",
-      "default_value": "Replace the cat with a dalmatian",
-      "type": "str",
-      "node_class": "TextEncodeQwenImageEditPlus",
-      "node_title": "TextEncodeQwenImageEditPlus",
-      "description": "prompt parameter for TextEncodeQwenImageEditPlus",
-      "category": "prompts"
-    },
-    {
-      "key": "112.width",
-      "node_id": "112",
-      "input_key": "width",
-      "default_value": 1024,
-      "type": "int",
-      "node_class": "EmptySD3LatentImage",
-      "node_title": "EmptySD3LatentImage",
-      "description": "Output width in pixels",
-      "category": "dimensions"
-    },
-    {
-      "key": "112.height",
-      "node_id": "112",
-      "input_key": "height",
-      "default_value": 1024,
-      "type": "int",
-      "node_class": "EmptySD3LatentImage",
-      "node_title": "EmptySD3LatentImage",
-      "description": "Output height in pixels",
-      "category": "dimensions"
-    },
-    {
-      "key": "112.batch_size",
-      "node_id": "112",
-      "input_key": "batch_size",
-      "default_value": 1,
-      "type": "int",
-      "node_class": "EmptySD3LatentImage",
-      "node_title": "EmptySD3LatentImage",
-      "description": "batch_size parameter for EmptySD3LatentImage",
-      "category": "dimensions"
     }
   ],
   "ui_metadata": {
-    "nodeType": "workflow_qwen_image_edit",
-    "label": "Qwen Image Edit",
+    "nodeType": "workflow_image_qwen_image_edit",
+    "label": "Image Qwen Image Edit",
     "icon": "image",
-    "color": "#f97316",
+    "color": "#f43f5e",
     "category": "image",
     "outputSockets": [
       {

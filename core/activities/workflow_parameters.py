@@ -44,7 +44,7 @@ async def apply_workflow_parameters(
             getattr(chain_logger.worker, level)(msg)
 
     # Lazy import to avoid circular dependency
-    from core.registry import get_registry
+    from core.workflow_registry import get_registry
 
     log(f"Applying parameters to workflow: {workflow_name}")
 

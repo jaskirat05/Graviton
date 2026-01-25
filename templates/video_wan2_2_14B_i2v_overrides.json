@@ -1,6 +1,6 @@
 {
-  "workflow_hash": "sha256:cb496d3b9ee1af39bff0da56062c274d67cacd415eb5d4b91bf7f686ad46cd00",
-  "generated_at": "2025-12-27T04:37:17.369879Z",
+  "workflow_hash": "sha256:abddc07ae2ed2243abdb72bfbcab4223a82fc644662b58893ee1bcfdf0826625",
+  "generated_at": "2026-01-25T01:24:11.401781Z",
   "workflow_name": "video_wan2_2_14B_i2v",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
@@ -261,7 +261,7 @@
       "key": "93.text",
       "node_id": "93",
       "input_key": "text",
-      "default_value": "The white dragon warrior stands angry, eyes full of determination and strength. The camera slowly moves closer or circles around the warrior, highlighting the powerful presence and heroic spirit of the character.",
+      "default_value": "The white dragon warrior stands still, eyes full of determination and strength. The camera slowly moves closer or circles around the warrior, highlighting the powerful presence and heroic spirit of the character.",
       "type": "str",
       "node_class": "CLIPTextEncode",
       "node_title": "CLIP Text Encode (Positive Prompt)",
@@ -477,5 +477,19 @@
       "description": "codec parameter for SaveVideo",
       "category": "other"
     }
-  ]
+  ],
+  "ui_metadata": {
+    "nodeType": "workflow_video_wan2_2_14B_i2v",
+    "label": "Video Wan2 2 14B I2V",
+    "icon": "video",
+    "color": "#ec4899",
+    "category": "video",
+    "outputSockets": [
+      {
+        "id": "output",
+        "type": "video",
+        "label": "Video"
+      }
+    ]
+  }
 }

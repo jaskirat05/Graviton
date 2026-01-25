@@ -1,14 +1,14 @@
 {
-  "workflow_hash": "sha256:1756c48518eaefdc4005f9a0f8ff30c2981faf37b1a0170625b2d42fb13b7fe9",
-  "generated_at": "2026-01-06T17:39:52.286766Z",
-  "workflow_name": "image_qwen_edit",
+  "workflow_hash": "sha256:2e6c8dc02115ecd3be319d370901abf9566945712d0710cd6b6a1bd97022b5ed",
+  "generated_at": "2026-01-25T01:24:11.303749Z",
+  "workflow_name": "qwen_image_edit (1)",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
     {
       "key": "3.seed",
       "node_id": "3",
       "input_key": "seed",
-      "default_value": 857953892217130,
+      "default_value": 724723345395306,
       "type": "int",
       "node_class": "KSampler",
       "node_title": "KSampler",
@@ -170,32 +170,10 @@
       "category": "other"
     },
     {
-      "key": "76.prompt",
-      "node_id": "76",
-      "input_key": "prompt",
-      "default_value": "Put the cartoon as a logo on bottle with brand name hippo the great",
-      "type": "str",
-      "node_class": "TextEncodeQwenImageEdit",
-      "node_title": "TextEncodeQwenImageEdit",
-      "description": "prompt parameter for TextEncodeQwenImageEdit",
-      "category": "prompts"
-    },
-    {
-      "key": "77.prompt",
-      "node_id": "77",
-      "input_key": "prompt",
-      "default_value": "",
-      "type": "str",
-      "node_class": "TextEncodeQwenImageEdit",
-      "node_title": "TextEncodeQwenImageEdit",
-      "description": "prompt parameter for TextEncodeQwenImageEdit",
-      "category": "prompts"
-    },
-    {
       "key": "78.image",
       "node_id": "78",
       "input_key": "image",
-      "default_value": "ComfyUI_00193_.png",
+      "default_value": "brown dog.jpg",
       "type": "str",
       "node_class": "LoadImage",
       "node_title": "Load Image",
@@ -247,59 +225,76 @@
       "category": "other"
     },
     {
-      "key": "101.image",
-      "node_id": "101",
-      "input_key": "image",
-      "default_value": "00000-1679839837.png",
+      "key": "110.prompt",
+      "node_id": "110",
+      "input_key": "prompt",
+      "default_value": "",
       "type": "str",
-      "node_class": "LoadImage",
-      "node_title": "Load Image",
-      "description": "image parameter for LoadImage",
-      "category": "media"
+      "node_class": "TextEncodeQwenImageEditPlus",
+      "node_title": "TextEncodeQwenImageEditPlus",
+      "description": "prompt parameter for TextEncodeQwenImageEditPlus",
+      "category": "prompts"
     },
     {
-      "key": "103.direction",
-      "node_id": "103",
-      "input_key": "direction",
-      "default_value": "right",
+      "key": "111.prompt",
+      "node_id": "111",
+      "input_key": "prompt",
+      "default_value": "Replace the cat with a dalmatian",
       "type": "str",
-      "node_class": "ImageStitch",
-      "node_title": "Image Stitch",
-      "description": "direction parameter for ImageStitch",
-      "category": "other"
+      "node_class": "TextEncodeQwenImageEditPlus",
+      "node_title": "TextEncodeQwenImageEditPlus",
+      "description": "prompt parameter for TextEncodeQwenImageEditPlus",
+      "category": "prompts"
     },
     {
-      "key": "103.match_image_size",
-      "node_id": "103",
-      "input_key": "match_image_size",
-      "default_value": true,
-      "type": "bool",
-      "node_class": "ImageStitch",
-      "node_title": "Image Stitch",
-      "description": "match_image_size parameter for ImageStitch",
-      "category": "media"
-    },
-    {
-      "key": "103.spacing_width",
-      "node_id": "103",
-      "input_key": "spacing_width",
-      "default_value": 0,
+      "key": "112.width",
+      "node_id": "112",
+      "input_key": "width",
+      "default_value": 1024,
       "type": "int",
-      "node_class": "ImageStitch",
-      "node_title": "Image Stitch",
-      "description": "spacing_width parameter for ImageStitch",
-      "category": "other"
+      "node_class": "EmptySD3LatentImage",
+      "node_title": "EmptySD3LatentImage",
+      "description": "Output width in pixels",
+      "category": "dimensions"
     },
     {
-      "key": "103.spacing_color",
-      "node_id": "103",
-      "input_key": "spacing_color",
-      "default_value": "white",
-      "type": "str",
-      "node_class": "ImageStitch",
-      "node_title": "Image Stitch",
-      "description": "spacing_color parameter for ImageStitch",
-      "category": "other"
+      "key": "112.height",
+      "node_id": "112",
+      "input_key": "height",
+      "default_value": 1024,
+      "type": "int",
+      "node_class": "EmptySD3LatentImage",
+      "node_title": "EmptySD3LatentImage",
+      "description": "Output height in pixels",
+      "category": "dimensions"
+    },
+    {
+      "key": "112.batch_size",
+      "node_id": "112",
+      "input_key": "batch_size",
+      "default_value": 1,
+      "type": "int",
+      "node_class": "EmptySD3LatentImage",
+      "node_title": "EmptySD3LatentImage",
+      "description": "batch_size parameter for EmptySD3LatentImage",
+      "category": "dimensions"
     }
+  ],
+  "ui_metadata": {
+    "nodeType": "workflow_qwen_image_edit (1)",
+    "label": "Qwen Image Edit (1)",
+    "icon": "image",
+    "color": "#6366f1",
+    "category": "image",
+    "outputSockets": [
+      {
+        "id": "output",
+        "type": "image",
+        "label": "Image"
+      }
+    ]
+  },
+  "validated_servers": [
+    "procure-x"
   ]
 }

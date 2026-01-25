@@ -2,28 +2,49 @@
 
 /**
  * WorkflowNode - Node component for visual workflow editor
- * Shows execution status, progress, output preview, and approval UI
+ * Shows execution status, progress, output preview, approval UI, and server selection
  */
 
-import { memo, useState } from "react";
+import { memo, useState, useEffect } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { useExecutionStore, type StepStatus } from "@/stores/executionStore";
+import { useServerStore } from "@/stores/serverStore";
 import { approveStep, rejectStep } from "@/hooks/useChainEvents";
+import { VideoPlayer } from "@/components/ui/VideoPlayer";
 import type { WorkflowNodeData, InputSocketDefinition, OutputSocketDefinition, InputParameterDefinition } from "./types";
 
 type WorkflowNodeType = Node<WorkflowNodeData & Record<string, unknown>>;
 
 function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeType>) {
-  const { label, icon, color, definition, parameters } = data as WorkflowNodeData;
+  const { label, color, definition, parameters, server, serverValidation } = data as WorkflowNodeData;
 
   // Get execution state for this node
+  const execution = useExecutionStore((state) => state.execution);
   const stepExecution = useExecutionStore((state) => state.getStepExecution(id));
   const pendingApproval = useExecutionStore((state) => state.getPendingApproval(id));
   const onApprovalResolved = useExecutionStore((state) => state.onApprovalResolved);
+  const requestUpdateMode = useExecutionStore((state) => state.requestUpdateMode);
+
+  // Server store
+  const servers = useServerStore((state) => state.servers);
+  const fetchServers = useServerStore((state) => state.fetchServers);
+  const validateWorkflowServer = useServerStore((state) => state.validateWorkflowServer);
+
+  // Fetch servers on mount
+  useEffect(() => {
+    if (servers.length === 0) {
+      fetchServers();
+    }
+  }, [servers.length, fetchServers]);
+
+  // Check if this node can have its parameters updated (pending execution)
+  const canUpdate = execution?.status === "running" &&
+    (!stepExecution || stepExecution.status === "idle");
 
   // Local state for approval actions
   const [isApproving, setIsApproving] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   // Truncate long text for preview
   const truncate = (text: string, maxLength: number = 50) => {
@@ -108,24 +129,11 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
 
       {/* Header */}
       <div
-        className="flex items-center gap-2 px-3 py-2 border-b border-[var(--border)]"
+        className="px-3 py-2 border-b border-[var(--border)]"
         style={{ backgroundColor: `${color}10` }}
       >
-        <div
-          className="flex items-center justify-center w-7 h-7 rounded text-sm flex-shrink-0"
-          style={{ backgroundColor: color }}
-        >
-          {icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-[var(--text-primary)] truncate">
-            {label}
-          </div>
-          {definition.group && (
-            <div className="text-[10px] text-[var(--text-muted)] truncate">
-              {definition.group}
-            </div>
-          )}
+        <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+          {label}
         </div>
       </div>
 
@@ -161,16 +169,19 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
         <div className="px-3 py-2 border-b border-[var(--border)]">
           <div className="text-[10px] text-[var(--text-muted)] mb-1">Output</div>
           <div className="relative w-full h-24 bg-[var(--surface-3)] rounded overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={stepExecution.artifactUrl}
-              alt="Output preview"
-              className="w-full h-full object-contain"
-              onError={(e) => {
-                // Hide image on error (might be a video)
-                e.currentTarget.style.display = "none";
-              }}
-            />
+            {definition.outputs[0]?.type === "video" ? (
+              <VideoPlayer
+                url={stepExecution.artifactUrl}
+                className="w-full h-full"
+              />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={stepExecution.artifactUrl}
+                alt="Output preview"
+                className="w-full h-full object-contain"
+              />
+            )}
           </div>
         </div>
       )}
@@ -282,6 +293,89 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
               +{definition.inputParameters.length - 4} more...
             </div>
           )}
+        </div>
+      )}
+
+      {/* Update button for pending nodes during execution */}
+      {canUpdate && (
+        <div className="px-3 py-2 border-t border-[var(--border)]">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              requestUpdateMode(id);
+            }}
+            className="w-full px-2 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors flex items-center justify-center gap-1"
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Update Parameters
+          </button>
+        </div>
+      )}
+
+      {/* Server selection */}
+      <div className="px-3 py-2 border-t border-[var(--border)]">
+        <div className="text-[9px] uppercase tracking-wide text-[var(--text-muted)] mb-1">
+          Server
+        </div>
+        <select
+          value={server || ""}
+          onChange={async (e) => {
+            const selectedServer = e.target.value || undefined;
+            // Update node data - this will be handled by parent
+            const event = new CustomEvent("nodeServerChange", {
+              detail: { nodeId: id, server: selectedServer },
+            });
+            window.dispatchEvent(event);
+
+            // Validate if server selected
+            if (selectedServer) {
+              setIsValidating(true);
+              const result = await validateWorkflowServer(data.type, selectedServer);
+              // Dispatch validation result
+              const validationEvent = new CustomEvent("nodeServerValidation", {
+                detail: { nodeId: id, validation: result },
+              });
+              window.dispatchEvent(validationEvent);
+              setIsValidating(false);
+            }
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="w-full px-2 py-1 text-xs bg-[var(--surface-3)] border border-[var(--border)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand-secondary)]"
+        >
+          <option value="">Auto (Load Balanced)</option>
+          {servers.map((s) => (
+            <option key={s.name} value={s.name}>
+              {s.name} ({s.node_count} nodes)
+            </option>
+          ))}
+        </select>
+        {isValidating && (
+          <div className="mt-1 text-[9px] text-blue-400">Validating...</div>
+        )}
+        {serverValidation && !serverValidation.valid && (
+          <div className="mt-1 text-[9px] text-yellow-400" title={serverValidation.error}>
+            ⚠ {serverValidation.error || "Server may not support this workflow"}
+          </div>
+        )}
+        {serverValidation?.valid && server && (
+          <div className="mt-1 text-[9px] text-green-400">✓ Validated</div>
+        )}
+      </div>
+
+      {/* Output type strip at bottom */}
+      {definition.outputs.length > 0 && (
+        <div
+          className="flex items-center justify-center gap-2 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider rounded-b-lg"
+          style={{ backgroundColor: getSocketColor(definition.outputs[0].type) }}
+        >
+          {definition.outputs.map((output: OutputSocketDefinition, idx: number) => (
+            <span key={output.id} className="text-white">
+              {idx > 0 && <span className="mr-2">•</span>}
+              {output.type}
+            </span>
+          ))}
         </div>
       )}
     </div>

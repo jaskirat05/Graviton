@@ -19,24 +19,26 @@ async def select_best_server(
     chain_name: Optional[str] = None,
     chain_version: int = 1,
     chain_id: Optional[str] = None,
+    server_name: Optional[str] = None,
 ) -> str:
     """
     Activity: Select the best available server.
 
     Uses real-time queue depth from servers to select the one
-    with the shortest queue.
+    with the shortest queue, or selects a specific server by name.
 
     Args:
-        strategy: Selection strategy (currently only 'least_queue' supported)
+        strategy: Selection strategy ('least_queue', 'least_loaded', or 'specific')
         chain_name: Chain name for logging
         chain_version: Chain version for logging
         chain_id: Chain ID for logging
+        server_name: Server name (required when strategy is 'specific')
 
     Returns:
         Server HTTP URL (e.g., "http://localhost:8188")
 
     Raises:
-        Exception: If no servers are available
+        Exception: If no servers are available or specified server not found
     """
     chain_logger = None
     if chain_id and chain_name:
@@ -49,6 +51,18 @@ async def select_best_server(
     log(f"Selecting server with strategy: {strategy}")
 
     registry = ServerRegistry.get_instance()
+
+    # Handle specific server selection
+    if strategy == "specific" and server_name:
+        server_info = registry.get_server_by_name(server_name)
+        if not server_info:
+            log(f"Server '{server_name}' not found", "error")
+            raise Exception(f"Server '{server_name}' not found in registry")
+
+        log(f"Selected specific server: {server_info.name} ({server_info.http_url})")
+        return server_info.http_url
+
+    # Fall back to load balancing
     load_balancer = LoadBalancer(registry)
 
     try:

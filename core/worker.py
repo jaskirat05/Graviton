@@ -54,6 +54,7 @@ from core.activities import (
     publish_step_completed_activity,
     create_approval_request_activity,
     upload_local_inputs,
+    save_executed_definition_activity,
 )
 from core.servers import ServerRegistry
 from core.database import init_db
@@ -110,6 +111,7 @@ async def main():
             publish_step_completed_activity,
             create_approval_request_activity,
             upload_local_inputs,
+            save_executed_definition_activity,
         ]
     )
 

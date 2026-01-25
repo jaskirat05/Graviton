@@ -17,6 +17,7 @@ from core.database import (
     update_chain_status,
     update_workflow_status,
     get_workflow,
+    save_executed_definition,
 )
 from core.services.broadcast import publish_chain_event
 from core.observability.chain_logger import ChainLogger
@@ -175,7 +176,7 @@ async def update_workflow_status_activity(
         chain_id: Chain ID for logging
     """
     log = _get_log_func(chain_name, chain_version, chain_id)
-    log(f"Updating workflow {workflow_id} status to: {status}")
+    log(f"Updating workflow {workflow_id} status to: {status} (error: {error_message[:200] if error_message else None})")
 
     try:
         with get_session() as session:
@@ -262,3 +263,42 @@ async def get_workflow_artifacts(
     except Exception as e:
         log(f"Failed to get workflow artifacts: {e}", "error")
         return []
+
+
+@activity.defn
+async def save_executed_definition_activity(
+    chain_id: str,
+    executed_definition: Dict[str, Any],
+    chain_name: Optional[str] = None,
+    chain_version: int = 1,
+) -> None:
+    """
+    Activity: Save the executed definition (with actual parameters) to the chain.
+
+    Called after chain completion to persist the final state including
+    any parameter updates that were made during execution via signals.
+
+    Args:
+        chain_id: Chain ID
+        executed_definition: Final chain definition with actual executed parameters
+        chain_name: Chain name for logging
+        chain_version: Chain version for logging
+    """
+    log = _get_log_func(chain_name, chain_version, chain_id)
+    log(f"Saving executed definition for chain {chain_id}")
+
+    try:
+        with get_session() as session:
+            result = save_executed_definition(
+                session=session,
+                chain_id=chain_id,
+                executed_definition=executed_definition,
+            )
+            if result:
+                log(f"✓ Saved executed definition for chain {chain_id}")
+            else:
+                log(f"Chain {chain_id} not found when saving executed definition", "warning")
+
+    except Exception as e:
+        log(f"Failed to save executed definition: {e}", "error")
+        # Don't fail the workflow for this - it's a nice-to-have

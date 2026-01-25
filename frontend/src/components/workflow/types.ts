@@ -69,7 +69,6 @@ export interface BaseNodeDefinition {
   readonly description: string;
 
   // Appearance
-  readonly icon: string;
   readonly category: NodeCategory;
   readonly color: string;
 
@@ -94,10 +93,14 @@ export interface BaseNodeDefinition {
 export interface WorkflowNodeData {
   type: string;        // workflow_name (e.g., "flux_dev")
   label: string;       // display label (e.g., "Flux Dev")
-  icon: string;
   color: string;
   parameters: Record<string, string | number>;
   definition: BaseNodeDefinition;
+  server?: string;     // Optional server name to execute on
+  serverValidation?: {  // Validation result for selected server
+    valid: boolean;
+    error?: string;
+  };
 }
 
 /**
@@ -121,6 +124,7 @@ export interface ChainStep {
   depends_on?: string[];
   requires_approval?: boolean;
   parameters: Record<string, unknown>;
+  server?: string;  // Optional server name to execute on
 
   // UI-only field (stripped before sending to backend)
   position?: { x: number; y: number };

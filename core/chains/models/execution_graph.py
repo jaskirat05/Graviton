@@ -45,6 +45,7 @@ class StepNode:
     dependencies: List[str] = field(default_factory=list)  # List for serialization compatibility
     requires_approval: bool = False
     approval_config: Dict[str, Any] = field(default_factory=dict)
+    target_server: Optional[str] = None  # User-specified server name (from chain definition)
 
     # Runtime state
     status: str = "pending"  # pending, executing, completed, failed, skipped_condition, skipped_dependency, timeout, rejected

@@ -280,16 +280,17 @@ class WorkflowRegistry:
         with open(workflow_file, 'r', encoding='utf-8') as f:
             workflow_data = json.load(f)
 
-        # Extract and strip UI metadata (not sent to ComfyUI)
+        # Extract and strip metadata (not sent to ComfyUI)
         ui_metadata_raw = workflow_data.pop("_ui_metadata", None)
+        comfy_metadata = workflow_data.pop("_comfy_automate", None)
         ui_metadata = self._parse_ui_metadata(ui_metadata_raw) if ui_metadata_raw else None
 
-        # If _ui_metadata was present, write cleaned workflow back to disk
+        # If any metadata was present, write cleaned workflow back to disk
         # This ensures workflow files stay ComfyUI-compatible
-        if ui_metadata_raw is not None:
+        if ui_metadata_raw is not None or comfy_metadata is not None:
             with open(workflow_file, 'w', encoding='utf-8') as f:
                 json.dump(workflow_data, f, indent=2, ensure_ascii=False)
-            logger.info(f"  Stripped _ui_metadata from {workflow_file.name}")
+            logger.info(f"  Stripped metadata from {workflow_file.name}")
 
         # Calculate current hash (without _ui_metadata)
         current_hash = self._calculate_hash(workflow_data)

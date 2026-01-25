@@ -1,6 +1,6 @@
 {
   "workflow_hash": "sha256:2be4014d1e61538ed554e5d4edcdcbdade8d462fe113d9b3895fe24a9245fe76",
-  "generated_at": "2026-01-06T17:39:52.277364Z",
+  "generated_at": "2026-01-25T01:24:11.319192Z",
   "workflow_name": "fluxdev",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
@@ -58,6 +58,17 @@
       "node_title": "EmptySD3LatentImage",
       "description": "batch_size parameter for EmptySD3LatentImage",
       "category": "dimensions"
+    },
+    {
+      "key": "30.ckpt_name",
+      "node_id": "30",
+      "input_key": "ckpt_name",
+      "default_value": "flux1-dev-fp8.safetensors",
+      "type": "str",
+      "node_class": "CheckpointLoaderSimple",
+      "node_title": "Load Checkpoint",
+      "description": "ckpt_name parameter for CheckpointLoaderSimple",
+      "category": "other"
     },
     {
       "key": "31.seed",
@@ -149,17 +160,20 @@
     }
   ],
   "ui_metadata": {
-    "nodeType": "image_generate",
-    "label": "Flux Dev",
-    "icon": "🖼️",
-    "color": "#22c55e",
+    "nodeType": "workflow_fluxdev",
+    "label": "Fluxdev",
+    "icon": "image",
+    "color": "#eab308",
     "category": "image",
     "outputSockets": [
       {
-        "id": "image",
+        "id": "output",
         "type": "image",
         "label": "Image"
       }
     ]
-  }
+  },
+  "validated_servers": [
+    "procure-x"
+  ]
 }

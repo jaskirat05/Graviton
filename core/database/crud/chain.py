@@ -108,6 +108,35 @@ def delete_chain(session: Session, chain_id: str) -> bool:
     return True
 
 
+def save_executed_definition(
+    session: Session,
+    chain_id: str,
+    executed_definition: Dict[str, Any],
+) -> Optional[Chain]:
+    """
+    Save the executed definition (with actual parameters used) to the chain.
+
+    Called after chain completion to persist the final state including
+    any parameter updates that were made during execution.
+
+    Args:
+        session: Database session
+        chain_id: Chain ID
+        executed_definition: Final chain definition with actual executed parameters
+
+    Returns:
+        Updated Chain or None if not found
+    """
+    chain = get_chain(session, chain_id)
+    if not chain:
+        return None
+
+    chain.executed_definition = executed_definition
+    session.commit()
+    session.refresh(chain)
+    return chain
+
+
 def get_chain_by_hash(
     session: Session,
     definition_hash: str,

@@ -81,10 +81,10 @@ export function NodeMenu({
                 className="w-full px-3 py-2 flex items-center gap-3 hover:bg-zinc-800 transition-colors text-left"
               >
                 <span
-                  className="w-8 h-8 rounded flex items-center justify-center text-lg"
-                  style={{ backgroundColor: node.color + "20" }}
+                  className="w-8 h-8 rounded flex items-center justify-center text-xs font-bold text-white"
+                  style={{ backgroundColor: node.color }}
                 >
-                  {node.icon}
+                  {node.label.slice(0, 2).toUpperCase()}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm text-white font-medium truncate">

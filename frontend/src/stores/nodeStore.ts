@@ -29,7 +29,6 @@ export interface BackendWorkflowDefinition {
   workflow_name: string;
   nodeType: string;
   label: string;
-  icon: string;
   color: string;
   category: "image" | "video" | "utility";
   inputSockets: BackendSocketDefinition[];
@@ -127,7 +126,6 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
           type: w.workflow_name, // workflow_name is the node type
           label: w.label,
           description: `${w.category} workflow`,
-          icon: w.icon,
           category: w.category as NodeCategory,
           color: w.color,
           group: nodeTypeToLabel(w.nodeType), // For menu grouping (e.g., "Image Generate")

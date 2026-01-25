@@ -17,6 +17,7 @@ from .database_operations import (
     update_workflow_status_activity,
     get_workflow_artifacts,
     publish_step_completed_activity,
+    save_executed_definition_activity,
 )
 from .approval_operations import create_approval_request_activity
 from .cache_operations import (
@@ -40,6 +41,7 @@ __all__ = [
     "update_workflow_status_activity",
     "get_workflow_artifacts",
     "publish_step_completed_activity",
+    "save_executed_definition_activity",
     "create_approval_request_activity",
     "build_cache_from_database",
     "get_next_chain_version",
