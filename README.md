@@ -23,7 +23,7 @@ Graviton turns ComfyUI into a production-ready workflow engine. Chain multiple w
 ### Step 1: Clone & Setup
 
 ```bash
-git clone https://github.com/jaski055/graviton.git
+git clone https://github.com/jaskirat05/graviton.git
 cd graviton
 cp .env.example .env
 cp config.yaml.example config.yaml
