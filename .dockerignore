@@ -1,7 +1,9 @@
 # Git
 .git
 .gitignore
-
+templates/
+chains/
+data/
 # Python
 __pycache__
 *.py[cod]

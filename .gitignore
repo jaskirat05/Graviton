@@ -24,7 +24,9 @@ wheels/
 .venv/
 venv/
 ENV/
-
+templates/
+chains/
+data/
 # IDE
 .idea/
 .vscode/
