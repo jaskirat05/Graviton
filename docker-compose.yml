@@ -1,0 +1,165 @@
+version: "3.5"
+services:
+  elasticsearch:
+    container_name: temporal-elasticsearch
+    environment:
+      - cluster.routing.allocation.disk.threshold_enabled=true
+      - cluster.routing.allocation.disk.watermark.low=512mb
+      - cluster.routing.allocation.disk.watermark.high=256mb
+      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms256m -Xmx256m
+      - xpack.security.enabled=false
+    image: elasticsearch:${ELASTICSEARCH_VERSION}
+    networks:
+      - temporal-network
+    expose:
+      - 9200
+    volumes:
+      - /var/lib/elasticsearch/data
+  postgresql:
+    container_name: temporal-postgresql
+    environment:
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_USER: temporal
+    image: postgres:${POSTGRESQL_VERSION}
+    networks:
+      - temporal-network
+    expose:
+      - 5432
+    volumes:
+      - /var/lib/postgresql/data
+  temporal:
+    container_name: temporal
+    depends_on:
+      - postgresql
+      - elasticsearch
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=temporal
+      - POSTGRES_PWD=temporal
+      - POSTGRES_SEEDS=postgresql
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      - ENABLE_ES=true
+      - ES_SEEDS=elasticsearch
+      - ES_VERSION=v7
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CLI_ADDRESS=temporal:7233
+    image: temporalio/auto-setup:${TEMPORAL_VERSION}
+    networks:
+      - temporal-network
+    ports:
+      - 7233:7233
+    volumes:
+      - ./dynamicconfig:/etc/temporal/config/dynamicconfig
+  temporal-admin-tools:
+    container_name: temporal-admin-tools
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CLI_ADDRESS=temporal:7233
+    image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
+    networks:
+      - temporal-network
+    stdin_open: true
+    tty: true
+  temporal-ui:
+    container_name: temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    image: temporalio/ui:${TEMPORAL_UI_VERSION}
+    networks:
+      - temporal-network
+    ports:
+      - 8080:8080
+  redis:
+    container_name: temporal-redis
+    image: redis:${REDIS_VERSION:-7-alpine}
+    networks:
+      - temporal-network
+    ports:
+      - 6379:6379
+    volumes:
+      - /var/lib/redis/data
+
+  # ComfyAutomate Services
+  comfy-worker:
+    container_name: comfy-worker
+    image: jaski055/graviton-backend:latest
+    command: python core/worker.py
+    depends_on:
+      - temporal
+      - redis
+      - postgresql
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - REDIS_URL=redis://redis:6379
+      - TEMPLATES_DIR=/app/templates
+      - CONFIG_PATH=/app/config.yaml
+      - DATABASE_URL=postgresql://temporal:temporal@postgresql:5432/temporal
+      - HOST_UID=${HOST_UID:-}
+      - HOST_GID=${HOST_GID:-}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./templates:/app/templates
+      - ./chains:/app/chains:ro
+      - ./artifacts:/app/artifacts
+    networks:
+      - temporal-network
+    restart: unless-stopped
+
+  comfy-gateway:
+    container_name: comfy-gateway
+    image: jaski055/graviton-backend:latest
+    command: python core/main.py
+    depends_on:
+      - temporal
+      - redis
+      - comfy-worker
+      - postgresql
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - REDIS_URL=redis://redis:6379
+      - TEMPLATES_DIR=/app/templates
+      - CONFIG_PATH=/app/config.yaml
+      - DATABASE_URL=postgresql://temporal:temporal@postgresql:5432/temporal
+      - HOST_UID=${HOST_UID:-}
+      - HOST_GID=${HOST_GID:-}
+    ports:
+      - 8001:8001
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./templates:/app/templates
+      - ./chains:/app/chains:ro
+      - ./artifacts:/app/artifacts
+    networks:
+      - temporal-network
+    restart: unless-stopped
+
+  comfy-frontend:
+    container_name: comfy-frontend
+    image: jaski055/graviton-frontend:latest
+    depends_on:
+      - comfy-gateway
+    environment:
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+    ports:
+      - 3000:3000
+    networks:
+      - temporal-network
+    restart: unless-stopped
+
+networks:
+  temporal-network:
+    driver: bridge
+    name: temporal-network

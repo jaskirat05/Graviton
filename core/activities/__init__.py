@@ -10,13 +10,14 @@ from .chain_templates import resolve_chain_templates
 from .chain_conditions import evaluate_chain_condition
 from .workflow_parameters import apply_workflow_parameters
 from .transfer_artifacts import transfer_artifacts_from_storage
-from .execute_workflow import execute_and_track_workflow
+from .execute_workflow import execute_and_track_workflow, interrupt_comfy_prompt
 from .database_operations import (
     create_workflow_record,
     update_chain_status_activity,
     update_workflow_status_activity,
     get_workflow_artifacts,
     publish_step_completed_activity,
+    publish_level_wait_event,
     save_executed_definition_activity,
 )
 from .approval_operations import create_approval_request_activity
@@ -36,11 +37,13 @@ __all__ = [
     "apply_workflow_parameters",
     "transfer_artifacts_from_storage",
     "execute_and_track_workflow",
+    "interrupt_comfy_prompt",
     "create_workflow_record",
     "update_chain_status_activity",
     "update_workflow_status_activity",
     "get_workflow_artifacts",
     "publish_step_completed_activity",
+    "publish_level_wait_event",
     "save_executed_definition_activity",
     "create_approval_request_activity",
     "build_cache_from_database",

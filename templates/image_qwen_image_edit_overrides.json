@@ -1,6 +1,6 @@
 {
   "workflow_hash": "sha256:0c2c79ac69701d2bb1bbad004f2d4e71a53c017829961e94587d3f35de46cd01",
-  "generated_at": "2026-01-25T01:24:11.350959Z",
+  "generated_at": "2026-01-26T12:33:44.695127Z",
   "workflow_name": "image_qwen_image_edit",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
@@ -251,7 +251,7 @@
     "nodeType": "workflow_image_qwen_image_edit",
     "label": "Image Qwen Image Edit",
     "icon": "image",
-    "color": "#f43f5e",
+    "color": "#8b5cf6",
     "category": "image",
     "outputSockets": [
       {

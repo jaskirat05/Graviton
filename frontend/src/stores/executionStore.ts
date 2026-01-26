@@ -18,7 +18,8 @@ export type StepStatus =
 export interface StepExecution {
   status: StepStatus;
   progress?: number;        // 0-1 during execution
-  currentNode?: string;     // ComfyUI node being executed
+  currentNode?: string;     // ComfyUI node ID being executed
+  currentNodeName?: string; // ComfyUI node name being executed
   error?: string;           // Error message if failed
   outputCount?: number;     // Number of outputs
   artifactUrl?: string;     // URL to view output
@@ -72,7 +73,7 @@ interface ExecutionStore {
 
   // Event handlers (called by SSE hook)
   onStepExecuting: (stepId: string, workflow: string, server: string) => void;
-  onStepNode: (stepId: string, nodeId: string, progress?: number) => void;
+  onStepNode: (stepId: string, nodeId: string, nodeName?: string, progress?: number) => void;
   onStepWorkflowComplete: (stepId: string, outputCount: number) => void;
   onStepWorkflowFailed: (stepId: string, error: string) => void;
   onStepValidationFailed: (stepId: string, errorType: string, errorMessage: string) => void;
@@ -164,7 +165,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     });
   },
 
-  onStepNode: (stepId, nodeId, progress) => {
+  onStepNode: (stepId, nodeId, nodeName, progress) => {
     set((state) => {
       if (!state.execution) return state;
       return {
@@ -175,6 +176,7 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
             [stepId]: {
               ...state.execution.steps[stepId],
               currentNode: nodeId,
+              currentNodeName: nodeName,
               progress: progress ?? state.execution.steps[stepId]?.progress,
             },
           },

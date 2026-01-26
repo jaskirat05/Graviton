@@ -42,6 +42,7 @@ from core.executors import ComfyUIWorkflow, ChainExecutorWorkflow
 from core.activities import (
     select_best_server,
     execute_and_track_workflow,
+    interrupt_comfy_prompt,
     download_and_store_artifacts,
     resolve_chain_templates,
     evaluate_chain_condition,
@@ -52,6 +53,7 @@ from core.activities import (
     update_workflow_status_activity,
     get_workflow_artifacts,
     publish_step_completed_activity,
+    publish_level_wait_event,
     create_approval_request_activity,
     upload_local_inputs,
     save_executed_definition_activity,
@@ -87,9 +89,10 @@ async def main():
         logger.info(f"  Server: {server.name} ({server.provider_type})")
 
     # Connect to Temporal Server
-    # For local dev with CLI: localhost:7233
-    # For docker-compose: temporal:7233
-    client = await Client.connect("localhost:7233")
+    from core.config import get_temporal_address
+    temporal_address = get_temporal_address()
+    logger.info(f"Connecting to Temporal at {temporal_address}...")
+    client = await Client.connect(temporal_address)
 
     # Create worker
     worker = Worker(
@@ -99,6 +102,7 @@ async def main():
         activities=[                     # Register activity functions
             select_best_server,
             execute_and_track_workflow,
+            interrupt_comfy_prompt,
             download_and_store_artifacts,
             resolve_chain_templates,
             evaluate_chain_condition,
@@ -109,6 +113,7 @@ async def main():
             update_workflow_status_activity,
             get_workflow_artifacts,
             publish_step_completed_activity,
+            publish_level_wait_event,
             create_approval_request_activity,
             upload_local_inputs,
             save_executed_definition_activity,

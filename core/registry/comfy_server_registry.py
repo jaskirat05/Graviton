@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import random
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -22,8 +23,8 @@ from core.config import get_servers
 
 logger = logging.getLogger(__name__)
 
-# Local templates directory (at project root, same level as core/)
-TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
+# Local templates directory (env: TEMPLATES_DIR, default: ./templates relative to cwd)
+TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", "templates"))
 
 # Color palette for random UI assignment
 UI_COLORS = [

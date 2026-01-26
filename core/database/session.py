@@ -11,10 +11,14 @@ from contextlib import contextmanager
 
 from .models import Base
 
-# Database configuration
-DATABASE_DIR = Path(__file__).parent.parent / "data"
-DATABASE_DIR.mkdir(parents=True, exist_ok=True)
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATABASE_DIR}/artifacts.db")
+# Database configuration (env: DATABASE_URL)
+# Default to PostgreSQL (shared with Temporal) or SQLite for local dev
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/artifacts.db")
+
+# Create data dir for SQLite if needed
+if DATABASE_URL.startswith("sqlite"):
+    db_path = DATABASE_URL.replace("sqlite:///", "")
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
 # Create engine
 # Use StaticPool for SQLite to avoid threading issues

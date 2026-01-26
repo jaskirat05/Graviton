@@ -1,6 +1,6 @@
 {
   "workflow_hash": "sha256:2dfbe149659e622237580bfff120f0667ca580457b0cfe0079b3405a465c15fc",
-  "generated_at": "2026-01-25T01:24:11.368044Z",
+  "generated_at": "2026-01-26T12:33:44.703669Z",
   "workflow_name": "video_wan2_2_14B_fun_camera_test",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
@@ -548,7 +548,7 @@
     "nodeType": "workflow_video_wan2_2_14B_fun_camera_test",
     "label": "Video Wan2 2 14B Fun Camera Test",
     "icon": "video",
-    "color": "#0ea5e9",
+    "color": "#ec4899",
     "category": "video",
     "outputSockets": [
       {

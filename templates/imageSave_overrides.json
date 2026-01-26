@@ -1,6 +1,6 @@
 {
   "workflow_hash": "sha256:66417df83a97eb60d0c0b96c0721169c7cabee4689c5f0980a840cf4033e58e9",
-  "generated_at": "2026-01-25T01:24:11.418007Z",
+  "generated_at": "2026-01-26T12:33:44.725860Z",
   "workflow_name": "imageSave",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
@@ -108,7 +108,7 @@
     "nodeType": "workflow_imageSave",
     "label": "Imagesave",
     "icon": "video",
-    "color": "#f97316",
+    "color": "#0ea5e9",
     "category": "video",
     "outputSockets": [
       {

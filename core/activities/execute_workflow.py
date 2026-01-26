@@ -2,14 +2,34 @@
 Activity: Execute workflow with hybrid tracking
 """
 
+import asyncio
 from typing import Dict, Any, Optional
 
 import httpx
 from temporalio import activity
 
 from core.clients.comfy import ComfyUIClient
+from core.clients.comfy.http import ComfyHTTPClient
 from core.services.broadcast import publish_chain_event
 from core.observability.chain_logger import ChainLogger
+
+
+@activity.defn
+async def interrupt_comfy_prompt(server_address: str) -> bool:
+    """
+    Activity: Interrupt the currently running prompt on a ComfyUI server.
+
+    Args:
+        server_address: ComfyUI server address
+
+    Returns:
+        True if interrupt was successful
+    """
+    client = ComfyHTTPClient(server_address)
+    try:
+        return await client.interrupt()
+    finally:
+        await client.close()
 
 
 @activity.defn
@@ -85,10 +105,17 @@ async def execute_and_track_workflow(
             if chain_id and step_id:
                 node_id = update.current_node or last_node_id[0]
                 if node_id or update.progress > 0:
+                    # Look up node name from workflow JSON
+                    node_name = None
+                    if node_id and node_id in workflow_json:
+                        node_meta = workflow_json[node_id].get("_meta", {})
+                        node_name = node_meta.get("title")
+
                     await publish_chain_event(chain_id, {
                         "type": "step_node",
                         "step_id": step_id,
                         "node_id": node_id,
+                        "node_name": node_name,
                         "progress": update.progress,
                     })
 
@@ -197,6 +224,17 @@ async def execute_and_track_workflow(
             "node_errors": node_errors,
         }
         raise Exception(json.dumps(structured_error))
+
+    except asyncio.CancelledError:
+        # Activity was cancelled - interrupt the ComfyUI prompt
+        log(f"Step {step_id}: Activity cancelled, interrupting ComfyUI prompt", "warning")
+        try:
+            interrupt_client = ComfyHTTPClient(server_address, chain_logger=chain_logger)
+            await interrupt_client.interrupt()
+            await interrupt_client.close()
+        except Exception as interrupt_err:
+            log(f"Step {step_id}: Failed to interrupt ComfyUI: {interrupt_err}", "warning")
+        raise  # Re-raise to properly cancel
 
     except Exception as e:
         # Any other unexpected error

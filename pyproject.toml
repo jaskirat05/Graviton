@@ -28,6 +28,7 @@ dependencies = [
     "broadcaster[redis]>=0.3.0",
     "sse-starlette>=1.6.0",
     "httpx-sse>=0.4.0",
+    "psycopg2-binary>=2.9.0",
 ]
 
 [project.scripts]

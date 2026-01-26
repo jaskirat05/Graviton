@@ -26,6 +26,7 @@ Usage:
 import json
 import hashlib
 import logging
+import os
 import shutil
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -122,7 +123,7 @@ class WorkflowRegistry:
             workflows_dir: Path to workflows directory
         """
         if workflows_dir is None:
-            workflows_dir = Path(__file__).parent.parent / "templates"
+            workflows_dir = Path(os.environ.get("TEMPLATES_DIR", "templates"))
 
         self.workflows_dir = Path(workflows_dir)
         self.workflows: Dict[str, WorkflowInfo] = {}

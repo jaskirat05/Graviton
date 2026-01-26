@@ -245,6 +245,46 @@ class ComfyHTTPClient:
 
         return response.json()
 
+    async def interrupt(self) -> bool:
+        """
+        Interrupt the currently running prompt on ComfyUI server.
+
+        Returns:
+            True if interrupt was successful
+        """
+        url = f"{self.server_address}/interrupt"
+        self._log(f"POST {url} - interrupting current prompt")
+        try:
+            response = await self.client.post(url)
+            response.raise_for_status()
+            self._log(f"POST {url} -> interrupted")
+            return True
+        except Exception as e:
+            self._log(f"POST {url} -> failed: {e}")
+            return False
+
+    async def delete_from_queue(self, prompt_id: str) -> bool:
+        """
+        Delete a pending prompt from the queue.
+
+        Args:
+            prompt_id: The prompt ID to delete
+
+        Returns:
+            True if deletion was successful
+        """
+        url = f"{self.server_address}/queue"
+        payload = {"delete": [prompt_id]}
+        self._log(f"POST {url} - deleting prompt {prompt_id}")
+        try:
+            response = await self.client.post(url, json=payload)
+            response.raise_for_status()
+            self._log(f"POST {url} -> deleted {prompt_id}")
+            return True
+        except Exception as e:
+            self._log(f"POST {url} -> failed: {e}")
+            return False
+
     async def close(self):
         """Close HTTP client"""
         await self.client.aclose()

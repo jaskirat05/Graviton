@@ -143,7 +143,10 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
           <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)]">
             <span className="animate-pulse">Executing...</span>
             {stepExecution.currentNode && (
-              <span className="truncate">Node: {stepExecution.currentNode}</span>
+              <span className="truncate">
+                Node: {stepExecution.currentNode}
+                {stepExecution.currentNodeName && ` (${stepExecution.currentNodeName})`}
+              </span>
             )}
           </div>
           <div className="mt-1 h-1 bg-[var(--surface-4)] rounded-full overflow-hidden">

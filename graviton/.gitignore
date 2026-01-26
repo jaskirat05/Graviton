@@ -1,0 +1,15 @@
+# User config (keep examples only)
+config.yaml
+.env
+
+# Generated artifacts
+artifacts/*
+!artifacts/.gitkeep
+
+# User templates (keep gitkeep only)
+templates/*
+!templates/.gitkeep
+
+# User chains
+chains/*
+!chains/.gitkeep

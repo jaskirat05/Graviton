@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*.so
+.venv
+venv
+.eggs
+*.egg-info
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# Local files
+*.log
+.env
+config.yaml
+
+# Build artifacts
+artifacts/
+*.db
+
+# Frontend (has its own Dockerfile)
+frontend/
+
+# Docs (keep README.md for pyproject.toml)
+LICENSE

@@ -61,7 +61,7 @@ export function ChainDashboard({ onClose }: ChainDashboardProps) {
     if (selectedVersionId) {
       fetchChainDefinition(selectedVersionId).then((result) => {
         if (result?.definition) {
-          setDefinition(result.executed_definition ?? result.definition as unknown as ChainDefinition);
+          setDefinition((result.executed_definition ?? result.definition) as unknown as ChainDefinition);
         }
       });
     }

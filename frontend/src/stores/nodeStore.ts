@@ -81,7 +81,7 @@ function transformParameters(params: BackendParameterDefinition[]): InputParamet
 // Store
 // =============================================================================
 
-interface NodeStore {
+export interface NodeStore {
   // All node definitions (one per workflow)
   nodeDefinitions: BaseNodeDefinition[];
   isLoading: boolean;
@@ -169,7 +169,3 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
     return result;
   },
 }));
-
-// Selectors
-export const selectNodeDefinitions = (state: NodeStore) => state.nodeDefinitions;
-export const selectIsLoading = (state: NodeStore) => state.isLoading;

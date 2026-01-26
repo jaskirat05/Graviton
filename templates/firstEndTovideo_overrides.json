@@ -1,6 +1,6 @@
 {
   "workflow_hash": "sha256:d1bddf4c6004364eb3987fa57c739e1384d167a16cafc5500a50163ead3e41cd",
-  "generated_at": "2026-01-25T01:24:11.333884Z",
+  "generated_at": "2026-01-26T12:33:44.685378Z",
   "workflow_name": "firstEndTovideo",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
@@ -493,7 +493,7 @@
     "nodeType": "workflow_firstEndTovideo",
     "label": "Firstendtovideo",
     "icon": "video",
-    "color": "#f97316",
+    "color": "#14b8a6",
     "category": "video",
     "outputSockets": [
       {

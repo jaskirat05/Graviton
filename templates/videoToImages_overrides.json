@@ -1,6 +1,6 @@
 {
   "workflow_hash": "sha256:af6daae13f9d123b0b5b5a2b577badabec929c129de2f16e3d03c2f87727788d",
-  "generated_at": "2026-01-25T01:24:11.435722Z",
+  "generated_at": "2026-01-26T12:33:44.732613Z",
   "workflow_name": "videoToImages",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
@@ -130,7 +130,7 @@
     "nodeType": "workflow_videoToImages",
     "label": "Videotoimages",
     "icon": "video",
-    "color": "#f43f5e",
+    "color": "#eab308",
     "category": "video",
     "outputSockets": [
       {

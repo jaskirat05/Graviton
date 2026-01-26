@@ -156,6 +156,32 @@ async def update_chain_status_activity(
 
 
 @activity.defn
+async def publish_level_wait_event(
+    chain_id: str,
+    level_num: int,
+    event_type: str,  # "started" or "ended"
+    wait_seconds: int = 0,
+    skipped: bool = False,
+) -> None:
+    """Publish level wait SSE events."""
+    try:
+        if event_type == "started":
+            await publish_chain_event(chain_id, {
+                "type": "level_wait_started",
+                "level_num": level_num,
+                "wait_seconds": wait_seconds,
+            })
+        else:
+            await publish_chain_event(chain_id, {
+                "type": "level_wait_ended",
+                "level_num": level_num,
+                "skipped": skipped,
+            })
+    except Exception:
+        pass  # Fire and forget
+
+
+@activity.defn
 async def update_workflow_status_activity(
     workflow_id: str,
     status: str,

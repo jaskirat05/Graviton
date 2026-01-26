@@ -4,6 +4,7 @@ Chain Executor Workflow
 Temporal workflow that executes chain plans by orchestrating child ComfyUI workflows.
 """
 
+import asyncio
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from datetime import timedelta
@@ -26,6 +27,7 @@ with job.unsafe.imports_passed_through():
         update_workflow_status_activity,
         get_workflow_artifacts,
         publish_step_completed_activity,
+        publish_level_wait_event,
         create_approval_request_activity,
         upload_local_inputs,
         save_executed_definition_activity,
@@ -191,6 +193,15 @@ class ChainExecutorWorkflow:
                 is_final_level = (level_num == total_levels - 1)
                 if level_wait_seconds > 0 and not is_final_level:
                     job.logger.info(f"Waiting {level_wait_seconds}s after level {level_num}")
+
+                    # Publish wait started event
+                    await job.execute_activity(
+                        publish_level_wait_event,
+                        args=[self._chain_id, level_num, "started", level_wait_seconds, False],
+                        start_to_close_timeout=timedelta(seconds=10),
+                    )
+
+                    skipped = False
                     try:
                         # Wait for skip signal or timeout (same pattern as approval wait)
                         await job.wait_condition(
@@ -198,10 +209,18 @@ class ChainExecutorWorkflow:
                             timeout=timedelta(seconds=level_wait_seconds)
                         )
                         # Signal received to skip wait
+                        skipped = True
                         job.logger.info(f"Level {level_num} wait skipped via signal")
-                    except TimeoutError:
+                    except (TimeoutError, asyncio.TimeoutError):
                         # Normal case - timeout means wait completed
                         job.logger.info(f"Level {level_num} wait completed")
+
+                    # Publish wait ended event
+                    await job.execute_activity(
+                        publish_level_wait_event,
+                        args=[self._chain_id, level_num, "ended", 0, skipped],
+                        start_to_close_timeout=timedelta(seconds=10),
+                    )
 
             # All levels complete
             self._status = "completed"

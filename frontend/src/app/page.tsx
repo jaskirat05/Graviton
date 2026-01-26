@@ -1,5 +1,5 @@
-import { ChainEditor } from "@/components/editor/ChainEditor";
+import { WorkflowCanvas } from "@/components/workflow/WorkflowCanvas";
 
 export default function Home() {
-  return <ChainEditor />;
+  return <WorkflowCanvas />;
 }

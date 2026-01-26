@@ -1,6 +1,6 @@
 {
   "workflow_hash": "sha256:2be4014d1e61538ed554e5d4edcdcbdade8d462fe113d9b3895fe24a9245fe76",
-  "generated_at": "2026-01-25T01:24:11.319192Z",
+  "generated_at": "2026-01-26T12:33:44.677276Z",
   "workflow_name": "fluxdev",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
@@ -163,7 +163,7 @@
     "nodeType": "workflow_fluxdev",
     "label": "Fluxdev",
     "icon": "image",
-    "color": "#eab308",
+    "color": "#6366f1",
     "category": "image",
     "outputSockets": [
       {
@@ -172,8 +172,5 @@
         "label": "Image"
       }
     ]
-  },
-  "validated_servers": [
-    "procure-x"
-  ]
+  }
 }

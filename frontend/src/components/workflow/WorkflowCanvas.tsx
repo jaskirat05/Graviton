@@ -28,6 +28,7 @@ import { ContextMenu } from "./ContextMenu";
 import { NodePropertiesPanel } from "./NodePropertiesPanel";
 import { ChainsSidebar } from "../chains/ChainsSidebar";
 import { ChainDashboard } from "../chains/ChainDashboard";
+import { LevelWaitBar } from "./LevelWaitBar";
 import { useNodeStore } from "@/stores/nodeStore";
 import { useExecutionStore } from "@/stores/executionStore";
 import { useChainStore } from "@/stores/chainStore";
@@ -395,9 +396,9 @@ export function WorkflowCanvas() {
     const chain = toChainDefinition(nodes, edges, currentChainName);
 
     try {
-      const requestBody: { chain: typeof chain; wait_seconds?: number } = { chain };
+      const requestBody: { chain: typeof chain; level_wait_seconds?: number } = { chain };
       if (waitEnabled && waitSeconds > 0) {
-        requestBody.wait_seconds = waitSeconds;
+        requestBody.level_wait_seconds = waitSeconds;
       }
 
       const response = await fetch("http://localhost:8001/chains/execute", {
@@ -601,6 +602,9 @@ export function WorkflowCanvas() {
           </span>
         </div>
       </div>
+
+      {/* Level wait progress bar */}
+      <LevelWaitBar />
 
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">

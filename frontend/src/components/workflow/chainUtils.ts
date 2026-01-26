@@ -10,7 +10,7 @@ import type {
   ChainDefinition,
   ChainStep,
 } from "./types";
-import type { useNodeStore } from "@/stores/nodeStore";
+import type { NodeStore } from "@/stores/nodeStore";
 
 // =============================================================================
 // Helpers
@@ -93,7 +93,7 @@ interface ImportResult {
 
 export function fromChainDefinition(
   chain: ChainDefinition,
-  nodeStore: ReturnType<typeof useNodeStore>
+  nodeStore: NodeStore
 ): ImportResult {
   const nodes: WorkflowNode[] = [];
   const edges: WorkflowEdge[] = [];

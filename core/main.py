@@ -5,6 +5,7 @@ This gateway uses Temporal for durable workflow execution.
 """
 
 import asyncio
+import os
 import uuid
 import sys
 from pathlib import Path
@@ -75,7 +76,10 @@ async def startup():
     logger, log_file = setup_logging(log_dir=log_dir, log_level="INFO")
 
     # Connect to Temporal
-    temporal_client = await Client.connect("localhost:7233")
+    from core.config import get_temporal_address
+    temporal_address = get_temporal_address()
+    logger.info("Connecting to Temporal", address=temporal_address)
+    temporal_client = await Client.connect(temporal_address)
 
     # Step 1: Sync templates from ComfyUI servers (downloads new templates with UI metadata)
     comfy_server_registry = ComfyServerRegistry.get_instance()
@@ -259,7 +263,7 @@ async def validate_workflow_server(request: ValidateWorkflowServerRequest) -> Di
         )
 
     # Load override file to check validated_servers
-    templates_dir = Path(__file__).parent.parent / "templates"
+    templates_dir = Path(os.environ.get("TEMPLATES_DIR", "templates"))
     override_file = templates_dir / f"{workflow_name}_overrides.json"
 
     override_data = None
@@ -375,7 +379,7 @@ async def get_workflow_validated_servers(workflow_name: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found")
 
     # Load override file
-    templates_dir = Path(__file__).parent.parent / "templates"
+    templates_dir = Path(os.environ.get("TEMPLATES_DIR", "templates"))
     override_file = templates_dir / f"{workflow_name}_overrides.json"
 
     validated_servers = []
@@ -470,7 +474,7 @@ async def get_workflow_parameter_options(workflow_name: str, server_name: str) -
         )
 
     # Load override file to get overridable parameters
-    templates_dir = Path(__file__).parent.parent / "templates"
+    templates_dir = Path(os.environ.get("TEMPLATES_DIR", "templates"))
     override_file = templates_dir / f"{workflow_name}_overrides.json"
 
     if not override_file.exists():

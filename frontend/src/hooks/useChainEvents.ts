@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { useExecutionStore } from "@/stores/executionStore";
+import { useLevelWaitStore } from "@/hooks/useLevelWait";
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8001";
 
@@ -14,6 +15,7 @@ interface ChainEventData {
   workflow?: string;
   server?: string;
   node_id?: string;
+  node_name?: string;
   progress?: number;
   output_count?: number;
   error?: string;
@@ -22,6 +24,9 @@ interface ChainEventData {
   token?: string;
   artifact_url?: string;
   artifact_id?: string;
+  level_num?: number;
+  wait_seconds?: number;
+  skipped?: boolean;
 }
 
 export function useChainEvents(chainId: string | null) {
@@ -39,6 +44,8 @@ export function useChainEvents(chainId: string | null) {
     onChainFailed,
   } = useExecutionStore();
 
+  const { startWait, endWait } = useLevelWaitStore();
+
   const handleEvent = useCallback((event: MessageEvent) => {
     try {
       const data: ChainEventData = JSON.parse(event.data);
@@ -55,7 +62,7 @@ export function useChainEvents(chainId: string | null) {
 
         case "step_node":
           if (data.step_id) {
-            onStepNode(data.step_id, data.node_id || "", data.progress);
+            onStepNode(data.step_id, data.node_id || "", data.node_name, data.progress);
           }
           break;
 
@@ -106,6 +113,16 @@ export function useChainEvents(chainId: string | null) {
         case "chain_failed":
           onChainFailed(data.error || "Unknown error");
           break;
+
+        case "level_wait_started":
+          if (data.level_num !== undefined && data.wait_seconds !== undefined) {
+            startWait(data.level_num, data.wait_seconds);
+          }
+          break;
+
+        case "level_wait_ended":
+          endWait();
+          break;
       }
     } catch (e) {
       console.error("Failed to parse SSE event:", e);
@@ -120,6 +137,8 @@ export function useChainEvents(chainId: string | null) {
     onApprovalRequested,
     onChainCompleted,
     onChainFailed,
+    startWait,
+    endWait,
   ]);
 
   useEffect(() => {
@@ -153,6 +172,8 @@ export function useChainEvents(chainId: string | null) {
       "approval_requested",
       "chain_completed",
       "chain_failed",
+      "level_wait_started",
+      "level_wait_ended",
     ];
 
     for (const eventType of eventTypes) {

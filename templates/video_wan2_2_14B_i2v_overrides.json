@@ -1,6 +1,6 @@
 {
   "workflow_hash": "sha256:abddc07ae2ed2243abdb72bfbcab4223a82fc644662b58893ee1bcfdf0826625",
-  "generated_at": "2026-01-25T01:24:11.401781Z",
+  "generated_at": "2026-01-26T12:33:44.719114Z",
   "workflow_name": "video_wan2_2_14B_i2v",
   "description": "Auto-generated parameter overrides. You can edit descriptions, remove parameters to make them immutable, or add custom categories.",
   "parameters": [
@@ -482,7 +482,7 @@
     "nodeType": "workflow_video_wan2_2_14B_i2v",
     "label": "Video Wan2 2 14B I2V",
     "icon": "video",
-    "color": "#ec4899",
+    "color": "#0ea5e9",
     "category": "video",
     "outputSockets": [
       {

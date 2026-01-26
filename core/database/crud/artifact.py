@@ -50,6 +50,7 @@ def create_artifact(
         extra_metadata=extra_metadata,
     )
     session.add(artifact)
+    session.flush()  # Ensure artifact is in DB before FK reference
 
     # If this is the latest, update workflow's latest_artifact_id
     if is_latest:
