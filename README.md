@@ -20,7 +20,16 @@ Graviton turns ComfyUI into a production-ready workflow engine. Chain multiple w
 - Docker & Docker Compose
 - At least one ComfyUI server running
 
-### Step 1: Setup ComfyUI
+### Step 1: Clone & Setup
+
+```bash
+git clone https://github.com/jaski055/graviton.git
+cd graviton
+cp .env.example .env
+cp config.yaml.example config.yaml
+```
+
+### Step 2: Setup ComfyUI
 
 Copy `folder_paths.py` to your ComfyUI installation directory:
 
@@ -30,29 +39,26 @@ cp folder_paths.py /path/to/ComfyUI/
 
 This enables Graviton to sync workflows from your ComfyUI server.
 
-### Step 2: Add Your Workflows
+### Step 3: Add Your Workflows
 
-Export your ComfyUI workflows (API format) and place them in the `templates/` directory:
+Export your ComfyUI workflows (API format) and place them in your **ComfyUI server's** `models/templates/` directory:
 
 ```
-templates/
+/path/to/ComfyUI/models/templates/
 ├── my_workflow.json
 ├── another_workflow.json
 └── ...
 ```
 
-### Step 3: Configure
+Graviton will automatically sync these workflows from your ComfyUI server.
 
-```bash
-cp config.yaml.example config.yaml
-```
+### Step 4: Configure
 
 Edit `config.yaml` with your ComfyUI server address (see config file for examples).
 
-### Step 4: Start
+### Step 5: Start
 
 ```bash
-cp .env.example .env
 docker compose up
 ```
 
@@ -72,10 +78,10 @@ For best compatibility, your ComfyUI workflows should follow these guidelines:
 
 ## Customizing Editable Parameters
 
-When you add a workflow, Graviton auto-generates an `_overrides.json` file:
+When Graviton syncs a workflow, it auto-generates an `_overrides.json` file in the `templates/` directory:
 
 ```
-templates/
+graviton/templates/
 ├── my_workflow.json
 ├── my_workflow_overrides.json    # Auto-generated
 ```
@@ -96,10 +102,6 @@ To check if a workflow will work on a specific ComfyUI server:
 4. Click **Validate**
 
 This checks if the server has all required custom nodes installed.
-
-## Adding Custom Templates
-
-You can also place workflow templates directly in the `/templates` directory without going through ComfyUI sync. Just ensure they follow the workflow requirements above.
 
 ## Configuration
 

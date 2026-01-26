@@ -41,14 +41,16 @@ This enables Graviton to sync workflows from your ComfyUI server.
 
 ### Step 3: Add Your Workflows
 
-Export your ComfyUI workflows (API format) and place them in the `templates/` directory:
+Export your ComfyUI workflows (API format) and place them in your **ComfyUI server's** `models/templates/` directory:
 
 ```
-templates/
+/path/to/ComfyUI/models/templates/
 ├── my_workflow.json
 ├── another_workflow.json
 └── ...
 ```
+
+Graviton will automatically sync these workflows from your ComfyUI server.
 
 ### Step 4: Configure
 
@@ -76,10 +78,10 @@ For best compatibility, your ComfyUI workflows should follow these guidelines:
 
 ## Customizing Editable Parameters
 
-When you add a workflow, Graviton auto-generates an `_overrides.json` file:
+When Graviton syncs a workflow, it auto-generates an `_overrides.json` file in the `templates/` directory:
 
 ```
-templates/
+graviton/templates/
 ├── my_workflow.json
 ├── my_workflow_overrides.json    # Auto-generated
 ```
