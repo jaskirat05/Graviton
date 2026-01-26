@@ -4,6 +4,10 @@
 
 Graviton turns ComfyUI into a production-ready workflow engine. Chain multiple workflows together, add human approval gates, automatically retry failed steps, and distribute work across multiple GPU servers.
 
+
+https://github.com/user-attachments/assets/75bcb96e-44cb-43cd-8827-afa0c662dcea
+
+
 ## Features
 
 - **Chain Workflows** - Define multi-step pipelines with automatic dependency resolution
