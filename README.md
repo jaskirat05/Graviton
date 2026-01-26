@@ -35,9 +35,10 @@ cp config.yaml.example config.yaml
 
 ### Step 2: Setup ComfyUI
 
-Copy `folder_paths.py` to your ComfyUI installation directory:
+Copy `graviton/folder_paths.py` to your ComfyUI installation directory:
 
 ```bash
+cd graviton
 cp folder_paths.py /path/to/ComfyUI/
 ```
 
