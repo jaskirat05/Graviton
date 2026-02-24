@@ -4,7 +4,7 @@ codex/
 *.py[cod]
 *$py.class
 *.so
-registry_templates/
+.registry_templates/
 tests/
 .Python
 build/
