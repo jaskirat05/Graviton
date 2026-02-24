@@ -1,4 +1,4 @@
-# ComfyAutomate Backend
+# Graviton Backend
 FROM python:3.10-slim
 
 WORKDIR /app
@@ -15,16 +15,12 @@ COPY core/ ./core/
 # Install the package and dependencies to system Python
 RUN uv pip install --system .
 
-# Copy remaining files
-COPY templates/ ./templates/
-COPY chains/ ./chains/
-
 # Copy and setup entrypoint
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Create directories
-RUN mkdir -p artifacts templates
+RUN mkdir -p artifacts registry_templates
 
 EXPOSE 8001
 

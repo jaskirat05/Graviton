@@ -1,7 +1,7 @@
 """
 Temporal Executors
 
-This module contains all Temporal workflow definitions for the ComfyAutomate system.
+This module contains all Temporal workflow definitions for the Graviton system.
 """
 
 from .comfy_executor import (

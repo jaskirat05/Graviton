@@ -13,8 +13,8 @@ function WorkflowEdgeComponent({
   id,
   source,
   target,
-  sourceHandle,
-  targetHandle,
+  sourceHandleId,
+  targetHandleId,
   sourceX,
   sourceY,
   targetX,
@@ -23,7 +23,13 @@ function WorkflowEdgeComponent({
   targetPosition,
   selected,
 }: EdgeProps) {
-  const color = getEdgeColor({ id, source, sourceHandle, target, targetHandle });
+  const color = getEdgeColor({
+    id,
+    source,
+    sourceHandle: sourceHandleId,
+    target,
+    targetHandle: targetHandleId,
+  });
   const [edgePath] = getSmoothStepPath({
     sourceX,
     sourceY,

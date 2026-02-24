@@ -60,13 +60,8 @@ class TemplateOverridesPatchRequest(BaseModel):
     remove_keys: list[str] = Field(default_factory=list)
 
 
-class TemplateApplyOverridesRequest(BaseModel):
-    runtime_overrides: Dict[str, Any] = Field(default_factory=dict)
-
-
 class TemplateRevalidateRequest(BaseModel):
     workflow: Dict[str, Any]
-    server_name: Optional[str] = None
 
 
 class DataPlaneModeRequest(BaseModel):
@@ -83,42 +78,12 @@ class WorkerControlSecretResponse(BaseModel):
     rotated_at: Optional[str] = None
 
 
-class WorkerControlSecretMetaResponse(BaseModel):
-    server_id: str
-    server_name: str
-    worker_id: str
-    secret_version: int
-    created_at: str
-    rotated_at: Optional[str] = None
-
-
 class RegisterWorkerSecretRequest(BaseModel):
     rotate: bool = False
 
 
-class ControlPlaneSettingsResponse(BaseModel):
-    settings_hash: str
-    config_version: Optional[str] = None
-    settings: Dict[str, Any]
-    updated_at: str
-    last_applied_at: Optional[str] = None
-
-
 class ControlPlaneSyncRequest(BaseModel):
     force: bool = False
-
-
-class WorkerConfigPushJobResponse(BaseModel):
-    id: str
-    server_id: str
-    server_name: str
-    target_hash: str
-    status: str
-    attempts: int
-    last_error: Optional[str] = None
-    next_retry_at: Optional[str] = None
-    updated_at: str
-    created_at: str
 
 
 class ServerControlPlaneStatusResponse(BaseModel):

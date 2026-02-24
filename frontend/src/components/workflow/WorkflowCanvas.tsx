@@ -36,7 +36,12 @@ import { useWorkflowEditorStore } from "@/stores/workflowEditorStore";
 import { toChainDefinition, fromChainDefinition } from "./chainUtils";
 import { sanitizeWorkflowStepId, isConnectionTypeCompatible } from "./canvasUtils";
 import { useNewWorkflowBridge } from "./hooks/useNewWorkflowBridge";
-import type { WorkflowNode as WorkflowNodeType, WorkflowEdge as WorkflowEdgeType, ChainDefinition } from "./types";
+import type {
+  WorkflowNode as WorkflowNodeType,
+  WorkflowEdge as WorkflowEdgeType,
+  WorkflowNodeData,
+  ChainDefinition,
+} from "./types";
 
 // Register custom node and edge types
 const nodeTypes: NodeTypes = {
@@ -168,7 +173,7 @@ export function WorkflowCanvas() {
     setNodes((currentNodes) => {
       let changed = false;
 
-      const reconciled = currentNodes.map((node) => {
+      const reconciled: WorkflowNodeType[] = currentNodes.map((node): WorkflowNodeType => {
         const data = node.data as WorkflowNodeData;
         if (!data?.type) return node;
 
@@ -191,7 +196,7 @@ export function WorkflowCanvas() {
               ...data,
               definition: {
                 ...data.definition,
-                category: "invalid",
+                category: "invalid" as const,
                 description: missingError,
               },
               serverValidation: {
@@ -199,7 +204,7 @@ export function WorkflowCanvas() {
                 error: missingError,
               },
             },
-          };
+          } as WorkflowNodeType;
         }
 
         const currentParams = data.parameters || {};
@@ -247,7 +252,7 @@ export function WorkflowCanvas() {
             definition: latest,
             parameters: nextParams,
           },
-        };
+        } as WorkflowNodeType;
       });
 
       return changed ? reconciled : currentNodes;

@@ -1,84 +1,54 @@
-version: "3.5"
+x-backend-image: &backend-image
+  image: ${BACKEND_IMAGE:-graviton-backend:dev}
+  build:
+    context: .
+    dockerfile: Dockerfile
+
+x-backend-env: &backend-env
+  TEMPORAL_ADDRESS: temporal:7233
+  REDIS_URL: redis://redis:6379
+  REGISTRY_TEMPLATE_ROOT_DIR: /app/registry_templates
+  DATABASE_URL: postgresql://temporal:temporal@graviton-postgresql:5432/temporal
+  HOST_UID: ${HOST_UID:-}
+  HOST_GID: ${HOST_GID:-}
+
 services:
-  elasticsearch:
-    container_name: temporal-elasticsearch
-    environment:
-      - cluster.routing.allocation.disk.threshold_enabled=true
-      - cluster.routing.allocation.disk.watermark.low=512mb
-      - cluster.routing.allocation.disk.watermark.high=256mb
-      - cluster.routing.allocation.disk.watermark.flood_stage=128mb
-      - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms256m -Xmx256m
-      - xpack.security.enabled=false
-    image: elasticsearch:${ELASTICSEARCH_VERSION}
-    networks:
-      - temporal-network
-    expose:
-      - 9200
-    volumes:
-      - /var/lib/elasticsearch/data
-  postgresql:
-    container_name: temporal-postgresql
+  graviton-postgresql:
+    container_name: graviton-postgresql
+    profiles: ["infra"]
     environment:
       POSTGRES_PASSWORD: temporal
       POSTGRES_USER: temporal
-    image: postgres:${POSTGRESQL_VERSION}
+    image: postgres:${POSTGRESQL_VERSION:-16}
     networks:
       - temporal-network
     expose:
       - 5432
     volumes:
       - /var/lib/postgresql/data
+
   temporal:
-    container_name: temporal
-    depends_on:
-      - postgresql
-      - elasticsearch
-    environment:
-      - DB=postgres12
-      - DB_PORT=5432
-      - POSTGRES_USER=temporal
-      - POSTGRES_PWD=temporal
-      - POSTGRES_SEEDS=postgresql
-      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
-      - ENABLE_ES=true
-      - ES_SEEDS=elasticsearch
-      - ES_VERSION=v7
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CLI_ADDRESS=temporal:7233
-    image: temporalio/auto-setup:${TEMPORAL_VERSION}
+    container_name: temporalite
+    profiles: ["infra"]
+    image: temporalio/temporal:${TEMPORAL_CLI_VERSION:-1.5.1}
+    command:
+      - server
+      - start-dev
+      - --ip
+      - 0.0.0.0
+      - --port
+      - "7233"
+      - --ui-port
+      - "8233"
     networks:
       - temporal-network
     ports:
       - 7233:7233
-    volumes:
-      - ./dynamicconfig:/etc/temporal/config/dynamicconfig
-  temporal-admin-tools:
-    container_name: temporal-admin-tools
-    depends_on:
-      - temporal
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CLI_ADDRESS=temporal:7233
-    image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
-    networks:
-      - temporal-network
-    stdin_open: true
-    tty: true
-  temporal-ui:
-    container_name: temporal-ui
-    depends_on:
-      - temporal
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
-    image: temporalio/ui:${TEMPORAL_UI_VERSION}
-    networks:
-      - temporal-network
-    ports:
-      - 8080:8080
+      - 8233:8233
+
   redis:
     container_name: temporal-redis
+    profiles: ["infra"]
     image: redis:${REDIS_VERSION:-7-alpine}
     networks:
       - temporal-network
@@ -89,6 +59,7 @@ services:
 
   nats:
     container_name: temporal-nats
+    profiles: ["infra"]
     image: nats:2-alpine
     command: ["-js"]
     networks:
@@ -96,6 +67,67 @@ services:
     ports:
       - 4222:4222
       - 8222:8222
+
+  graviton-worker:
+    <<: *backend-image
+    container_name: graviton-worker
+    profiles: ["app"]
+    command: python core/worker.py
+    depends_on:
+      - temporal
+      - redis
+      - graviton-postgresql
+      - nats
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment: *backend-env
+    volumes:
+      - ./registry_templates:/app/registry_templates
+      - ./artifacts:/app/artifacts
+    networks:
+      - temporal-network
+    restart: unless-stopped
+
+  graviton-gateway:
+    <<: *backend-image
+    container_name: graviton-gateway
+    profiles: ["app"]
+    command: python core/main.py
+    depends_on:
+      - temporal
+      - redis
+      - graviton-worker
+      - graviton-postgresql
+      - nats
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment: *backend-env
+    ports:
+      - 8001:8001
+    volumes:
+      - ./registry_templates:/app/registry_templates
+      - ./artifacts:/app/artifacts
+    networks:
+      - temporal-network
+    restart: unless-stopped
+
+  graviton-frontend:
+    container_name: graviton-frontend
+    profiles: ["app"]
+    image: ${FRONTEND_IMAGE:-graviton-frontend:dev}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - graviton-gateway
+    environment:
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+    ports:
+      - 3000:3000
+    networks:
+      - temporal-network
+    restart: unless-stopped
 
 networks:
   temporal-network:

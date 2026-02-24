@@ -1,14 +1,14 @@
 #!/bin/sh
-# Cross-platform entrypoint for ComfyAutomate
+# Cross-platform entrypoint for Graviton
 # The container always runs Linux, but host can be Windows/Mac/Linux
 
 # Create directories if they don't exist
-mkdir -p /app/templates /app/artifacts
+mkdir -p /app/registry_templates /app/artifacts
 
 # Fix ownership if HOST_UID and HOST_GID are provided (Linux/Mac)
 # On Windows Docker Desktop, file permissions are handled automatically
 if [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
-    chown -R "$HOST_UID:$HOST_GID" /app/templates /app/artifacts 2>/dev/null || true
+    chown -R "$HOST_UID:$HOST_GID" /app/registry_templates /app/artifacts 2>/dev/null || true
 fi
 
 # Wait for Temporal when configured (used by gateway + worker containers).

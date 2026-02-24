@@ -2,12 +2,6 @@
 
 import os
 from pathlib import Path
-from typing import List, Dict, Any
-
-
-def load_config() -> Dict[str, Any]:
-    """Legacy shim retained for compatibility; env-only config returns empty dict."""
-    return {}
 
 
 def get_storage_dir() -> Path:
@@ -16,27 +10,6 @@ def get_storage_dir() -> Path:
     path = Path(storage_path)
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def get_servers() -> List[Dict[str, Any]]:
-    """Legacy shim; server registration now goes through registry service APIs."""
-    return []
-
-
-def get_server(name: str) -> Dict[str, Any]:
-    """Get server config by name"""
-    for server in get_servers():
-        if server.get("name") == name:
-            return server
-    return {}
-
-
-def get_default_server() -> Dict[str, Any]:
-    """Legacy shim for backward compatibility."""
-    servers = get_servers()
-    if not servers:
-        raise ValueError("No servers configured. Use registry service APIs.")
-    return servers[0]
 
 
 def get_redis_url() -> str:

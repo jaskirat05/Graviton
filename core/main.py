@@ -54,7 +54,7 @@ def _get_allowed_cors_origins() -> list[str]:
     return origins or ["http://localhost:3000"]
 
 
-app = FastAPI(title="ComfyAutomate Temporal Gateway", version="2.0.0")
+app = FastAPI(title="Graviton Temporal Gateway", version="2.0.0")
 
 # CORS middleware for frontend
 app.add_middleware(
@@ -140,57 +140,6 @@ async def shutdown():
         await temporal_client.close()
 
 
-# Request/Response Models
-class WorkflowStatusResponse(BaseModel):
-    workflow_id: str
-    status: str
-    server_address: str | None = None
-    prompt_id: str | None = None
-    current_node: str | None = None
-    progress: float = 0.0
-    local_preview: list[Dict[str, str]] = []
-    log_file_path: str | None = None
-    error: str | None = None
-
-
-# ============================================================================
-# Workflow Discovery & Template Endpoints
-# ============================================================================
-
-@app.get("/workflows")
-async def list_workflows() -> Dict[str, Any]:
-    raise HTTPException(
-        status_code=410,
-        detail="Legacy endpoint removed. Use /api/registry/v1/templates",
-    )
-
-
-@app.get("/workflows/{workflow_name}")
-async def get_workflow_details(workflow_name: str) -> Dict[str, Any]:
-    raise HTTPException(
-        status_code=410,
-        detail="Legacy endpoint removed. Use /api/registry/v1/templates/{template_name}/workflow and /overrides",
-    )
-
-
-# Standalone workflow endpoints removed - use chains instead
-# A single workflow can be expressed as a single-step chain
-
-
-class ValidateWorkflowServerRequest(BaseModel):
-    """Request to validate if a workflow can run on a server"""
-    workflow_name: str = Field(..., description="Name of the workflow to validate")
-    server_name: str = Field(..., description="Name of the server to validate against")
-
-
-class AssetRegisterUploadRequest(BaseModel):
-    _unused: Optional[str] = None
-
-
-class AssetCompleteUploadRequest(BaseModel):
-    _unused: Optional[str] = None
-
-
 class ArtifactRefRequest(BaseModel):
     asset_ref: Dict[str, Any] | str
 
@@ -198,121 +147,6 @@ class ArtifactRefRequest(BaseModel):
 class ArtifactDownloadUrlRequest(BaseModel):
     asset_ref: Dict[str, Any] | str
     expires_in: int = Field(default=3600, ge=60, le=86400)
-
-
-@app.post("/workflows/validate-server")
-async def validate_workflow_server(request: ValidateWorkflowServerRequest) -> Dict[str, Any]:
-    raise HTTPException(
-        status_code=410,
-        detail="Legacy endpoint removed. Use /api/registry/v1/workflows/validate-server",
-    )
-
-
-@app.get("/servers")
-async def list_servers() -> Dict[str, Any]:
-    raise HTTPException(
-        status_code=410,
-        detail="Legacy endpoint removed. Use /api/registry/v1/servers",
-    )
-
-
-@app.get("/workflows/{workflow_name}/validated-servers")
-async def get_workflow_validated_servers(workflow_name: str) -> Dict[str, Any]:
-    raise HTTPException(
-        status_code=410,
-        detail="Legacy endpoint removed. Use /api/registry/v1/templates/{template_name}/overrides",
-    )
-
-
-@app.get("/servers/{server_name}/combo-options/{class_type}/{input_name}")
-async def get_combo_options(server_name: str, class_type: str, input_name: str) -> Dict[str, Any]:
-    raise HTTPException(
-        status_code=410,
-        detail="Legacy endpoint removed. Use /api/registry/v1/workflows/{workflow_name}/parameter-options/{server_name}",
-    )
-
-
-@app.get("/workflows/{workflow_name}/parameter-options/{server_name}")
-async def get_workflow_parameter_options(workflow_name: str, server_name: str) -> Dict[str, Any]:
-    raise HTTPException(
-        status_code=410,
-        detail="Legacy endpoint removed. Use /api/registry/v1/workflows/{workflow_name}/parameter-options/{server_name}",
-    )
-
-
-@app.get("/workflow/status/{workflow_id}")
-async def get_workflow_status(workflow_id: str) -> WorkflowStatusResponse:
-    """
-    Get current workflow status by querying Temporal
-
-    This uses Temporal queries to get real-time state from running workflow.
-    """
-    try:
-        # Get workflow handle
-        handle = temporal_client.get_workflow_handle(workflow_id)
-
-        # Query current status
-        status_data = await handle.query("get_status")
-
-        # Try to get result if completed
-        result = None
-        try:
-            result = await handle.result()
-        except:
-            # Workflow still running
-            pass
-
-        # Build response
-        response = WorkflowStatusResponse(
-            workflow_id=workflow_id,
-            status=status_data.get("status", "unknown"),
-            server_address=status_data.get("server_address"),
-            prompt_id=status_data.get("prompt_id"),
-            current_node=status_data.get("current_node"),
-            progress=status_data.get("progress", 0.0),
-            error=status_data.get("error")
-        )
-
-        # If completed, add final results
-        # Note: result is a dict, not WorkflowExecutionResult object
-        if result:
-            response.status = result.get("status")
-            response.local_preview = result.get("local_preview", [])
-            response.log_file_path = result.get("log_file_path")
-            if result.get("error"):
-                response.error = result.get("error")
-
-        return response
-
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Workflow not found: {str(e)}")
-
-
-@app.post("/workflow/cancel/{workflow_id}")
-async def cancel_workflow(workflow_id: str) -> Dict[str, str]:
-    """
-    Cancel a running workflow by sending cancel signal
-    """
-    try:
-        handle = temporal_client.get_workflow_handle(workflow_id)
-        await handle.signal("cancel")
-
-        return {
-            "workflow_id": workflow_id,
-            "status": "cancel_requested",
-            "message": "Cancel signal sent to workflow"
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Failed to cancel workflow: {str(e)}")
-
-
-@app.get("/artifacts/{artifact_id}")
-async def serve_artifact(artifact_id: str):
-    raise HTTPException(
-        status_code=410,
-        detail="Legacy endpoint removed. Use /artifact-service/artifacts/{artifact_id}/download",
-    )
 
 
 @app.get("/artifact-service/artifacts/{artifact_id}/download")
@@ -448,54 +282,6 @@ async def artifact_service_delete(request: ArtifactRefRequest):
         raise HTTPException(status_code=500, detail=f"Artifact delete failed: {error}") from error
 
 
-@app.post("/assets/register-upload")
-async def register_asset_upload(request: AssetRegisterUploadRequest):
-    raise HTTPException(
-        status_code=410,
-        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
-    )
-
-
-@app.post("/assets/{asset_id}:upload")
-async def upload_asset_bytes(asset_id: str):
-    raise HTTPException(
-        status_code=410,
-        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
-    )
-
-
-@app.post("/assets/{asset_id}:complete-upload")
-async def complete_asset_upload(asset_id: str, request: AssetCompleteUploadRequest):
-    raise HTTPException(
-        status_code=410,
-        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
-    )
-
-
-@app.get("/assets/{asset_id}/meta")
-async def get_asset_meta(asset_id: str):
-    raise HTTPException(
-        status_code=410,
-        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
-    )
-
-
-@app.get("/assets/{asset_id}/resolve")
-async def resolve_asset(asset_id: str):
-    raise HTTPException(
-        status_code=410,
-        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
-    )
-
-
-@app.get("/assets/{asset_id}/download")
-async def download_asset(asset_id: str):
-    raise HTTPException(
-        status_code=410,
-        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
-    )
-
-
 @app.get("/health")
 async def health_check():
     """Gateway health check"""
@@ -504,14 +290,6 @@ async def health_check():
         "temporal_connected": temporal_client is not None,
         "version": "2.0.0-temporal"
     }
-
-
-@app.get("/node-definitions")
-async def get_node_definitions():
-    raise HTTPException(
-        status_code=410,
-        detail="Legacy endpoint removed. Use /api/registry/v1/node-definitions",
-    )
 
 
 # ============================================================================

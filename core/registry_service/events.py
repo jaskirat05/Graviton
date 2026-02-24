@@ -25,7 +25,6 @@ class EventEnvelope(BaseModel):
 
 class EventTypes:
     SERVER_REGISTERED = "ServerRegistered"
-    SERVER_UPDATED = "ServerUpdated"
     DATA_PLANE_MODE_UPDATED = "DataPlaneModeUpdated"
     CONTROL_PLANE_SETTINGS_UPDATED = "ControlPlaneSettingsUpdated"
     SERVER_PING_RECEIVED = "ServerPingReceived"

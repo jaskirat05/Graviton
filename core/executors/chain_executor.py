@@ -653,9 +653,9 @@ class ChainExecutorWorkflow:
             start_to_close_timeout=timedelta(seconds=30)
         )
 
-        # Select server - use user-specified server or fall back to load balancing
+        # Select server - use user-specified server or fall back to registry load balancing
         if node.target_server:
-            # User specified a server - look up its URL from ServerRegistry
+            # User specified a server - resolve URL from registry projection
             target_server = await job.execute_activity(
                 select_best_server,
                 args=[

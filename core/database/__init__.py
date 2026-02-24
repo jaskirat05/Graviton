@@ -1,5 +1,5 @@
 """
-Database module for ComfyAutomate Temporal Gateway
+Database module for Graviton Temporal Gateway
 
 Provides SQLAlchemy models and CRUD operations for artifact tracking.
 """

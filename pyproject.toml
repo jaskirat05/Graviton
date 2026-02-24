@@ -1,5 +1,5 @@
 [project]
-name = "comfy-chain"
+name = "graviton"
 version = "0.1.0"
 description = "Distributed GPU farm orchestration for ComfyUI workflow chains"
 readme = "README.md"
@@ -23,8 +23,6 @@ dependencies = [
     "simpleeval>=0.9.13",
     "networkx>=3.0",
     "rich>=13.0.0",
-    "typer>=0.9.0",
-    "shellingham>=1.5.0",
     "broadcaster[redis]>=0.3.0",
     "sse-starlette>=1.6.0",
     "httpx-sse>=0.4.0",
@@ -33,9 +31,6 @@ dependencies = [
     "redis>=5.0.0",
     "python-dotenv>=1.0.1",
 ]
-
-[project.scripts]
-comfy-chain = "core.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]

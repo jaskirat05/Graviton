@@ -47,7 +47,6 @@ from core.activities import (
     select_best_server,
     execute_and_track_workflow,
     interrupt_comfy_prompt,
-    download_and_store_artifacts,
     resolve_chain_templates,
     evaluate_chain_condition,
     apply_workflow_parameters,
@@ -67,9 +66,7 @@ from core.activities import (
     upload_local_inputs,
     save_executed_definition_activity,
 )
-from core.servers import ServerRegistry
 from core.database import init_db
-from core.config import get_servers
 from core.services.broadcast import connect_broadcast, disconnect_broadcast
 
 
@@ -90,13 +87,6 @@ async def main():
     await connect_broadcast()
     logger.info("Redis broadcast connected")
 
-    # Initialize server registry
-    logger.info("Loading server registry...")
-    registry = ServerRegistry.get_instance()
-    logger.info(f"Registered {len(registry)} servers")
-    for server in registry.get_all_servers():
-        logger.info(f"  Server: {server.name} ({server.provider_type})")
-
     # Connect to Temporal Server
     from core.config import get_temporal_address
     temporal_address = get_temporal_address()
@@ -116,7 +106,6 @@ async def main():
             select_best_server,
             execute_and_track_workflow,
             interrupt_comfy_prompt,
-            download_and_store_artifacts,
             resolve_chain_templates,
             evaluate_chain_condition,
             apply_workflow_parameters,

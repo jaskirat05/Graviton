@@ -28,28 +28,21 @@ from .consumers import (
 from .health import HealthEvaluator
 from .jetstream_bus import JetStreamEventBus
 from .models import (
-    ControlPlaneSettingsResponse,
     ServerControlPlaneStatusResponse,
     ControlPlaneSyncRequest,
     DataPlaneModeRequest,
     HealthResponse,
-    PingRequest,
     RegisterWorkerSecretRequest,
     ServerResponse,
     ServerUpsertRequest,
-    TemplateApplyOverridesRequest,
-    TemplateRevalidateRequest,
     TemplateOverridesPatchRequest,
     TemplateOverridesRequest,
+    TemplateRevalidateRequest,
     TemplateWorkflowRequest,
-    WorkerConfigPushJobResponse,
-    WorkerControlSecretMetaResponse,
     WorkerControlSecretResponse,
 )
 from .node_definitions import (
     InMemoryNodeDefinitionsProjection,
-    NodeDefinitionParameterPatchRequest,
-    NodeDefinitionParametersReplaceRequest,
     NodeDefinitionsService,
 )
 from .projection import ProjectionStore
@@ -203,21 +196,6 @@ async def register_worker_control_secret(
         raise HTTPException(status_code=400, detail=detail)
 
 
-@app.get(
-    "/v1/servers/{server_id}/control-secret/meta",
-    response_model=WorkerControlSecretMetaResponse,
-)
-async def get_worker_control_secret_meta(server_id: str) -> WorkerControlSecretMetaResponse:
-    try:
-        result = await _service.get_worker_control_secret_meta(server_id)
-        return WorkerControlSecretMetaResponse(**result)
-    except ValueError as e:
-        detail = str(e)
-        if "not found" in detail.lower():
-            raise HTTPException(status_code=404, detail=detail)
-        raise HTTPException(status_code=400, detail=detail)
-
-
 @app.post("/v1/servers/{server_id}:sync-workflows")
 async def sync_server_workflows(server_id: str, force: bool = False) -> dict:
     try:
@@ -244,12 +222,6 @@ async def update_data_plane_mode(request: DataPlaneModeRequest) -> dict:
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.get("/v1/control-plane/settings", response_model=ControlPlaneSettingsResponse)
-async def get_control_plane_settings() -> ControlPlaneSettingsResponse:
-    result = await _service.get_control_plane_settings()
-    return ControlPlaneSettingsResponse(**result)
 
 
 @app.post("/v1/control-plane/sync")
@@ -303,38 +275,12 @@ async def get_server_control_plane_status(server_id: str) -> ServerControlPlaneS
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.get("/v1/control-plane/push-jobs", response_model=list[WorkerConfigPushJobResponse])
-async def list_control_plane_push_jobs(
-    server_id: str | None = None,
-    limit: int = 100,
-) -> list[WorkerConfigPushJobResponse]:
-    result = await _service.list_worker_config_push_jobs(server_id=server_id, limit=limit)
-    return [WorkerConfigPushJobResponse(**job) for job in result["jobs"]]
-
-
-@app.get("/v1/servers/{server_id}/object-info")
-async def get_server_object_info(server_id: str, include_full: bool = False) -> dict:
-    try:
-        return await _service.get_server_object_info(server_id, include_full=include_full)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
 @app.delete("/v1/servers/{server_id}")
 async def delete_server(server_id: str) -> dict:
     try:
         return await _service.delete_server(server_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
-
-@app.post("/v1/servers/{server_id}/pings", response_model=HealthResponse)
-async def ingest_ping(server_id: str, request: PingRequest) -> HealthResponse:
-    if await _store.get_server(server_id) is None:
-        raise HTTPException(status_code=404, detail=f"Server not found: {server_id}")
-
-    result = await _service.ingest_ping(server_id, request.model_dump())
-    return HealthResponse(**result)
 
 
 @app.get("/v1/servers/{server_id}/health", response_model=HealthResponse)
@@ -344,11 +290,6 @@ async def get_server_health(server_id: str) -> HealthResponse:
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return HealthResponse(**result)
-
-
-@app.get("/v1/health/eligible")
-async def get_eligible_servers() -> dict:
-    return await _service.get_eligible_servers()
 
 
 @app.websocket("/v1/events/ws")
@@ -365,12 +306,6 @@ async def registry_events_ws(websocket: WebSocket) -> None:
         await _event_hub.disconnect(websocket)
 
 
-@app.get("/v1/templates")
-async def list_templates() -> dict:
-    templates = _template_store.list_templates()
-    return {"templates": templates, "count": len(templates)}
-
-
 @app.get("/v1/node-definitions")
 async def list_node_definitions() -> list[dict]:
     return _node_definitions.list_node_definitions()
@@ -382,55 +317,6 @@ async def get_node_definition(workflow_name: str) -> dict:
         return _node_definitions.get_node_definition(workflow_name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
-
-@app.put("/v1/node-definitions/{workflow_name}/parameters")
-async def replace_node_definition_parameters(
-    workflow_name: str,
-    request: NodeDefinitionParametersReplaceRequest,
-) -> dict:
-    overrides = _node_definitions.build_overrides_for_replace(
-        workflow_name, request.parameters
-    )
-    try:
-        await _service.upsert_template_overrides(workflow_name, overrides)
-        _node_definitions.refresh_projection(workflow_name)
-        return _node_definitions.get_node_definition(workflow_name)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.patch("/v1/node-definitions/{workflow_name}/parameters")
-async def patch_node_definition_parameters(
-    workflow_name: str,
-    request: NodeDefinitionParameterPatchRequest,
-) -> dict:
-    overrides = _node_definitions.build_overrides_for_patch(
-        workflow_name=workflow_name,
-        upserts=request.upserts,
-        remove_keys=request.remove_keys,
-    )
-    try:
-        await _service.upsert_template_overrides(workflow_name, overrides)
-        _node_definitions.refresh_projection(workflow_name)
-        return _node_definitions.get_node_definition(workflow_name)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.delete("/v1/node-definitions/{workflow_name}/parameters/{parameter_key}")
-async def delete_node_definition_parameter(workflow_name: str, parameter_key: str) -> dict:
-    overrides = _node_definitions.build_overrides_for_patch(
-        workflow_name=workflow_name,
-        upserts=[],
-        remove_keys=[parameter_key],
-    )
-    try:
-        await _service.upsert_template_overrides(workflow_name, overrides)
-        _node_definitions.refresh_projection(workflow_name)
-        return _node_definitions.get_node_definition(workflow_name)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.put("/v1/templates/{template_name}/workflow")
@@ -500,28 +386,6 @@ async def patch_template_overrides(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/v1/templates/{template_name}:generate-overrides")
-async def generate_template_overrides(template_name: str) -> dict:
-    try:
-        result = await _service.generate_template_overrides(template_name)
-        await _event_hub.broadcast({"type": "template_changed", "template_name": template_name})
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.post("/v1/templates/{template_name}:apply-overrides")
-async def apply_template_overrides(
-    template_name: str, request: TemplateApplyOverridesRequest
-) -> dict:
-    try:
-        return await _service.apply_template_overrides(
-            template_name, request.runtime_overrides
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
 @app.delete("/v1/templates/{template_name}")
 async def delete_template(template_name: str) -> dict:
     result = await _service.delete_template(template_name)
@@ -539,17 +403,6 @@ async def get_template_workflow(template_name: str) -> dict:
     if workflow is None:
         raise HTTPException(status_code=404, detail=f"Template workflow not found: {template_name}")
     return {"template_name": template_name, "workflow": workflow}
-
-
-@app.get("/v1/templates/{template_name}/overrides")
-async def get_template_overrides(template_name: str) -> dict:
-    try:
-        overrides = _template_store.get_overrides(template_name)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    if overrides is None:
-        raise HTTPException(status_code=404, detail=f"Template overrides not found: {template_name}")
-    return {"template_name": template_name, "overrides": overrides}
 
 
 @app.post("/v1/workflows/validate-server")

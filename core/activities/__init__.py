@@ -5,7 +5,6 @@ Activities perform the actual work that interacts with external systems.
 They can fail and will be automatically retried by Temporal.
 """
 
-from .download_artifacts import download_and_store_artifacts
 from .chain_templates import resolve_chain_templates
 from .chain_conditions import evaluate_chain_condition
 from .workflow_parameters import apply_workflow_parameters
@@ -37,7 +36,6 @@ from .control_plane import push_control_plane_config_to_worker_activity
 
 __all__ = [
     "select_best_server",
-    "download_and_store_artifacts",
     "resolve_chain_templates",
     "evaluate_chain_condition",
     "apply_workflow_parameters",
