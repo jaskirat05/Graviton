@@ -64,3 +64,6 @@ htmlcov/
 
 # Claude
 .claude/
+
+/registry_templates/
+**/codex/
