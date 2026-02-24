@@ -5,6 +5,7 @@ A Workflow orchestrates the execution flow and maintains durable state.
 """
 
 from datetime import timedelta
+import json
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
@@ -15,7 +16,6 @@ from temporalio.common import RetryPolicy
 with workflow.unsafe.imports_passed_through():
     from ..activities import (
         select_best_server,
-        download_and_store_artifacts,
     )
 
 
@@ -46,6 +46,69 @@ class WorkflowExecutionResult:
     error: Optional[str] = None
 
 
+def _extract_graviton_asset_refs(outputs: Dict[str, Any]) -> list[Dict[str, Any]]:
+    """
+    Extract asset_id / asset_ref values emitted by Graviton save nodes from Comfy outputs.
+
+    Comfy node outputs are keyed by node_id with output slots as values. We accept either:
+    - direct string values
+    - single-item string lists
+    and detect keys like asset_id/asset_ref.
+    """
+    refs: list[Dict[str, Any]] = []
+    if not isinstance(outputs, dict):
+        return refs
+
+    for node_id, node_output in outputs.items():
+        if not isinstance(node_output, dict):
+            continue
+
+        asset_id: Optional[str] = None
+        asset_ref_raw: Optional[str] = None
+
+        for key, value in node_output.items():
+            lowered = str(key).lower()
+
+            normalized: Optional[str] = None
+            if isinstance(value, str):
+                normalized = value
+            elif isinstance(value, list) and len(value) == 1 and isinstance(value[0], str):
+                normalized = value[0]
+
+            if not normalized:
+                continue
+
+            if "asset_id" in lowered and not asset_id:
+                asset_id = normalized
+            elif "asset_ref" in lowered and not asset_ref_raw:
+                asset_ref_raw = normalized
+
+        if not asset_id and not asset_ref_raw:
+            continue
+
+        asset_ref_obj = None
+        if asset_ref_raw:
+            try:
+                parsed = json.loads(asset_ref_raw)
+                if isinstance(parsed, dict):
+                    asset_ref_obj = parsed
+                    if not asset_id and isinstance(parsed.get("asset_id"), str):
+                        asset_id = parsed.get("asset_id")
+            except Exception:
+                pass
+
+        refs.append(
+            {
+                "node_id": str(node_id),
+                "asset_id": asset_id,
+                "asset_ref": asset_ref_obj,
+                "asset_ref_raw": asset_ref_raw,
+            }
+        )
+
+    return refs
+
+
 @workflow.defn
 class ComfyUIWorkflow:
     """
@@ -55,8 +118,7 @@ class ComfyUIWorkflow:
     1. Selects best available GPU server
     2. Queues workflow on ComfyUI
     3. Tracks execution via WebSocket
-    4. Downloads generated images
-    5. Creates execution log
+    4. Creates execution log
 
     All state is persisted - survives crashes and restarts.
     """
@@ -159,56 +221,25 @@ class ComfyUIWorkflow:
 
             workflow.logger.info(f"Execution completed successfully")
 
-            # Step 3: Download files and persist to database
-            self._status = "downloading_files"
-            downloaded_files = await workflow.execute_activity(
-                download_and_store_artifacts,
-                args=[
-                    request.workflow_db_id,
-                    self._server_address,
-                    {"outputs": execution_result["outputs"]},
-                    request.chain_name,
-                    request.chain_version,
-                    request.chain_id,
-                ],
-                start_to_close_timeout=timedelta(minutes=5),
-                retry_policy=RetryPolicy(
-                    maximum_attempts=3,
-                    initial_interval=timedelta(seconds=2),
-                    maximum_interval=timedelta(seconds=10),
-                    backoff_coefficient=2.0
-                )
-            )
-
-            workflow.logger.info(f"Downloaded {len(downloaded_files)} file(s) locally")
-
-            # Step 4: Build standardized output for chains
+            # Step 3: Build standardized output for chains (asset-first, no legacy fallback).
+            asset_refs = _extract_graviton_asset_refs(execution_result.get("outputs", {}))
             output_data = None
-            if downloaded_files:
-                primary_file = downloaded_files[0]["original_filename"]
-
-                # Detect type from file extension
-                ext = primary_file.rsplit(".", 1)[-1].lower() if "." in primary_file else ""
-
-                # Determine output type based on extension
-                if ext in ("mp4", "webm", "mov", "avi", "mkv"):
-                    output_type = "video"
-                elif ext in ("mp3", "wav", "flac", "ogg", "aac", "m4a"):
-                    output_type = "audio"
-                elif ext in ("obj", "fbx", "gltf", "glb", "stl", "ply", "usdz"):
-                    output_type = "3d"
-                else:
-                    output_type = "image"
+            if asset_refs:
+                first = asset_refs[0]
+                first_ref = first.get("asset_ref")
+                if not first_ref and first.get("asset_id"):
+                    first_ref = {"asset_id": first.get("asset_id")}
 
                 output_data = {
-                    "output": primary_file,  # Generic key for chain templates: {{ step.output.output }}
-                    output_type: primary_file,  # Type-specific key: "video", "audio", "3d", or "image"
-                    "type": output_type,
-                    "files": [f["original_filename"] for f in downloaded_files],
-                    "count": len(downloaded_files)
+                    "type": "asset",
+                    "output": first.get("asset_id"),
+                    "asset_id": first.get("asset_id"),
+                    "asset_ref": first_ref,
+                    "assets": asset_refs,
+                    "count": len(asset_refs),
                 }
 
-            # Step 5: Complete
+            # Step 4: Complete
             self._status = "completed"
 
             return WorkflowExecutionResult(
@@ -216,7 +247,7 @@ class ComfyUIWorkflow:
                 prompt_id=self._prompt_id,
                 server_address=self._server_address,
                 output=output_data,
-                local_preview=downloaded_files
+                local_preview=[]
             )
 
         except Exception as e:

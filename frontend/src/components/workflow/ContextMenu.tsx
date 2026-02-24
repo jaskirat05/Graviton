@@ -19,6 +19,7 @@ const categoryConfig: Record<NodeCategory, { label: string; color: string }> = {
   image: { label: "Image", color: "#22c55e" },
   video: { label: "Video", color: "#3b82f6" },
   utility: { label: "Utility", color: "#8b5cf6" },
+  invalid: { label: "Invalid", color: "#ef4444" },
 };
 
 export function ContextMenu({ position, onSelect, onClose }: ContextMenuProps) {

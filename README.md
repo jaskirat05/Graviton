@@ -69,6 +69,16 @@ docker compose up
 
 That's it! Open http://localhost:3000 to access the visual editor.
 
+### Development mode (bind mounts, no rebuild for code edits)
+
+Use the dev override to mount source code into containers:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+This runs the frontend in `next dev` mode and bind-mounts backend code so edits are reflected without rebuilding images.
+
 ## Workflow Requirements
 
 For best compatibility, your ComfyUI workflows should follow these guidelines:

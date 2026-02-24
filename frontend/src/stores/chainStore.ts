@@ -20,6 +20,7 @@ export interface ChainName {
 export interface ChainVersion {
   id: string;
   version: number;
+  definition_hash?: string | null;
   status: "running" | "completed" | "failed" | "starting" | "cancelled";
   job_id: string;
   started_at: string | null;
@@ -58,6 +59,7 @@ export interface ChainDefinitionResponse {
   chain_id: string;
   chain_name: string;
   version: number;
+  definition_hash?: string | null;
   definition: Record<string, unknown>;
   executed_definition: Record<string, unknown> | null;
 }
@@ -224,7 +226,7 @@ export const useChainStore = create<ChainStore>((set, get) => ({
       if (!response.ok) throw new Error("Failed to delete chain");
 
       // Refresh the versions list
-      const { selectedChainName, chainVersions } = get();
+      const { chainVersions } = get();
       const newVersions = chainVersions.filter((v) => v.id !== chainId);
       set({ chainVersions: newVersions });
 

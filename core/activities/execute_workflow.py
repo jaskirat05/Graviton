@@ -164,10 +164,17 @@ async def execute_and_track_workflow(
             # Publish failure event
             if chain_id and step_id:
                 try:
+                    failed_node_id = last_node_id[0]
+                    failed_node_name = None
+                    if failed_node_id and failed_node_id in workflow_json:
+                        node_meta = workflow_json[failed_node_id].get("_meta", {})
+                        failed_node_name = node_meta.get("title")
                     await publish_chain_event(chain_id, {
                         "type": "step_workflow_failed",
                         "step_id": step_id,
                         "workflow": workflow_name,
+                        "node_id": failed_node_id,
+                        "node_name": failed_node_name,
                         "error": error_msg,
                     })
                 except Exception as e:
@@ -244,10 +251,17 @@ async def execute_and_track_workflow(
         # Publish failure event before re-raising
         if chain_id and step_id:
             try:
+                failed_node_id = last_node_id[0]
+                failed_node_name = None
+                if failed_node_id and failed_node_id in workflow_json:
+                    node_meta = workflow_json[failed_node_id].get("_meta", {})
+                    failed_node_name = node_meta.get("title")
                 await publish_chain_event(chain_id, {
                     "type": "step_workflow_failed",
                     "step_id": step_id,
                     "workflow": workflow_name,
+                    "node_id": failed_node_id,
+                    "node_name": failed_node_name,
                     "error": error_msg,
                 })
             except Exception as pub_err:

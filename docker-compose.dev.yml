@@ -1,0 +1,8 @@
+services:
+  comfy-worker:
+    volumes:
+      - ./core:/app/core
+
+  comfy-gateway:
+    volumes:
+      - ./core:/app/core

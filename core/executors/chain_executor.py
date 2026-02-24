@@ -5,8 +5,10 @@ Temporal workflow that executes chain plans by orchestrating child ComfyUI workf
 """
 
 import asyncio
+import hashlib
+import json
 from dataclasses import dataclass
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from datetime import timedelta
 
 from temporalio import workflow as job
@@ -21,12 +23,16 @@ with job.unsafe.imports_passed_through():
         evaluate_chain_condition,
         apply_workflow_parameters,
         select_best_server,
-        transfer_artifacts_from_storage,
         create_workflow_record,
+        create_cached_workflow_record_activity,
         update_chain_status_activity,
         update_workflow_status_activity,
+        persist_step_output_artifact_activity,
         get_workflow_artifacts,
         publish_step_completed_activity,
+        publish_step_cached_activity,
+        get_step_cache_activity,
+        upsert_step_cache_activity,
         publish_level_wait_event,
         create_approval_request_activity,
         upload_local_inputs,
@@ -91,6 +97,71 @@ class ChainExecutorWorkflow:
 
         # Level wait state
         self._skip_level_wait = {}  # level_num -> bool (signal to skip wait early)
+
+    def _normalize_for_hash(self, value: Any) -> Any:
+        """Create a deterministic JSON-serializable structure for hashing."""
+        if isinstance(value, dict):
+            return {k: self._normalize_for_hash(value[k]) for k in sorted(value.keys())}
+        if isinstance(value, list):
+            return [self._normalize_for_hash(v) for v in value]
+        if isinstance(value, float):
+            # Normalize minor float representation differences.
+            return float(f"{value:.12g}")
+        return value
+
+    def _sha256_hex(self, payload: Any) -> str:
+        normalized = self._normalize_for_hash(payload)
+        raw = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _build_runtime_fingerprint(self, node, resolved_params: Dict[str, Any]) -> str:
+        """
+        Runtime salt for cache-key safety.
+        Includes workflow + common model-selecting params when present.
+        """
+        model_related = {
+            k: v for k, v in resolved_params.items()
+            if any(token in k.lower() for token in ("ckpt", "model", "unet", "vae", "lora", "clip"))
+        }
+        return self._sha256_hex({
+            "cache_version": "v1",
+            "workflow": node.workflow,
+            "model_related": model_related,
+        })
+
+    def _compute_step_hashes(
+        self,
+        node,
+        resolved_params: Dict[str, Any],
+    ) -> Tuple[str, str, str]:
+        """
+        Returns (structure_hash, execution_hash, runtime_fingerprint).
+        """
+        dependency_signatures = []
+        for dep_id in sorted(node.dependencies):
+            dep_result = self._step_results.get(dep_id)
+            dependency_signatures.append({
+                "step_id": dep_id,
+                "status": dep_result.status if dep_result else None,
+                "artifact_id": dep_result.artifact_id if dep_result else None,
+                "output_hash": self._sha256_hex(dep_result.output) if dep_result else None,
+            })
+
+        structure_hash = self._sha256_hex({
+            "workflow": node.workflow,
+            "dependencies": sorted(node.dependencies),
+            "condition": node.condition,
+            "requires_approval": node.requires_approval,
+            "approval_config": node.approval_config if node.requires_approval else None,
+        })
+        runtime_fingerprint = self._build_runtime_fingerprint(node, resolved_params)
+        execution_hash = self._sha256_hex({
+            "structure_hash": structure_hash,
+            "resolved_params": resolved_params,
+            "dependency_signatures": dependency_signatures,
+            "runtime_fingerprint": runtime_fingerprint,
+        })
+        return structure_hash, execution_hash, runtime_fingerprint
 
     @job.run
     async def run(self, request: ChainExecutionRequest) -> ChainExecutionResult:
@@ -178,7 +249,7 @@ class ChainExecutorWorkflow:
                     # Update graph node status so dependencies work
                     node = graph.get_node(step_id)
                     if node:
-                        if result.status == "completed":
+                        if result.status in ("completed", "cached"):
                             node.mark_completed(
                                 artifact_id=result.artifact_id,
                                 workflow_db_id=result.workflow_db_id
@@ -334,7 +405,7 @@ class ChainExecutorWorkflow:
             args=[
                 artifact_id,
                 job.info().workflow_id,  # job_id
-                f"http://localhost:8001/artifacts/{artifact_id}",  # artifact_view_url
+                f"http://localhost:8001/artifact-service/artifacts/{artifact_id}/download",  # artifact_view_url
                 self._chain_id,  # chain_id
                 step_id,  # step_id
                 job.info().run_id,  # job_run_id
@@ -465,6 +536,7 @@ class ChainExecutorWorkflow:
 
         override_params = None
         retry_count = 0
+        persisted_artifact_id: Optional[str] = None
 
         while True:
             # Execute the workflow
@@ -472,21 +544,44 @@ class ChainExecutorWorkflow:
                 node, override_params
             )
 
+            # Persist step output artifact immediately so approvals and completion can use it.
+            persisted_artifact = await job.execute_activity(
+                persist_step_output_artifact_activity,
+                args=[
+                    workflow_db_id,
+                    result.output,
+                    self._graph.chain_name,
+                    self._chain_version,
+                    self._chain_id,
+                ],
+                start_to_close_timeout=timedelta(minutes=2),
+                retry_policy=RetryPolicy(
+                    maximum_attempts=2,
+                    initial_interval=timedelta(seconds=2),
+                    maximum_interval=timedelta(seconds=10),
+                    backoff_coefficient=2.0
+                )
+            )
+            persisted_artifact_id = persisted_artifact.get("artifact_id") if isinstance(persisted_artifact, dict) else None
+
             # No approval required - done
             if not node.requires_approval:
                 break
 
             # Wait for approval
-            artifact_ids = await job.execute_activity(
-                get_workflow_artifacts,
-                args=[
-                    workflow_db_id,
-                    self._graph.chain_name,
-                    self._chain_version,
-                    self._chain_id,
-                ],
-                start_to_close_timeout=timedelta(seconds=10)
-            )
+            if persisted_artifact_id:
+                artifact_ids = [persisted_artifact_id]
+            else:
+                artifact_ids = await job.execute_activity(
+                    get_workflow_artifacts,
+                    args=[
+                        workflow_db_id,
+                        self._graph.chain_name,
+                        self._chain_version,
+                        self._chain_id,
+                    ],
+                    start_to_close_timeout=timedelta(seconds=10)
+                )
 
             decision, new_params = await self._wait_for_approval(
                 step_id, workflow_db_id, artifact_ids, approval_config,
@@ -506,7 +601,13 @@ class ChainExecutorWorkflow:
             job.logger.info(f"Step {step_id}: Rejected, retry {retry_count}/{max_retries + 1}")
 
         # Build final result
-        return await self._finalize_step(node, result, workflow_db_id, resolved_params)
+        return await self._finalize_step(
+            node,
+            result,
+            workflow_db_id,
+            resolved_params,
+            persisted_artifact_id,
+        )
 
     async def _run_workflow(self, node, override_params: Optional[Dict] = None):
         """
@@ -677,76 +778,37 @@ class ChainExecutorWorkflow:
         self._servers_with_inputs.add(target_server)
 
     async def _transfer_dependency_artifacts(self, step_id: str, dependencies: List[str], target_server: str):
-        """Transfer artifacts from dependency steps to target server.
-
-        Gets artifact_id and workflow_db_id directly from step_results (works for both fresh and cached steps).
-        """
-        if not dependencies:
-            return
-
-        for dep_step_id in dependencies:
-            dep_result = self._step_results.get(dep_step_id)
-            if not dep_result:
-                job.logger.warning(f"Dependency {dep_step_id} result not found")
-                continue
-
-            # Get artifact_id directly from step result
-            artifact_id = (
-                dep_result.get("artifact_id") if isinstance(dep_result, dict)
-                else getattr(dep_result, "artifact_id", None)
+        """Legacy transfer path is intentionally disabled."""
+        if dependencies:
+            job.logger.info(
+                f"Step {step_id}: skipping legacy dependency artifact transfer to {target_server}"
             )
 
-            if not artifact_id:
-                job.logger.info(f"Dependency {dep_step_id} has no artifact to transfer")
-                continue
+    async def _finalize_step(
+        self,
+        node,
+        result,
+        workflow_db_id: str,
+        resolved_params: Dict,
+        persisted_artifact_id: Optional[str] = None,
+    ) -> StepResult:
+        """Build final StepResult and publish completion event."""
+        step_id = node.step_id
 
-            # Get workflow_db_id from step result (for record-keeping/traceability)
-            workflow_db_id = (
-                dep_result.get("workflow_db_id") if isinstance(dep_result, dict)
-                else getattr(dep_result, "workflow_db_id", None)
-            )
-
-            if not workflow_db_id:
-                job.logger.warning(f"Dependency {dep_step_id} has no workflow_db_id for traceability")
-                continue
-
-            job.logger.info(f"Transferring artifact {artifact_id} from {dep_step_id} (workflow: {workflow_db_id})")
-            await job.execute_activity(
-                transfer_artifacts_from_storage,
+        # Use persisted artifact ID when available; fallback to DB lookup.
+        artifact_id = persisted_artifact_id
+        if not artifact_id:
+            artifact_ids = await job.execute_activity(
+                get_workflow_artifacts,
                 args=[
                     workflow_db_id,
-                    target_server,
-                    [artifact_id],
-                    None,
                     self._graph.chain_name,
                     self._chain_version,
                     self._chain_id,
                 ],
-                start_to_close_timeout=timedelta(minutes=5),
-                retry_policy=RetryPolicy(
-                    maximum_attempts=3,
-                    initial_interval=timedelta(seconds=2),
-                    maximum_interval=timedelta(seconds=10),
-                    backoff_coefficient=2.0
-                )
+                start_to_close_timeout=timedelta(seconds=10)
             )
-
-    async def _finalize_step(self, node, result, workflow_db_id: str, resolved_params: Dict) -> StepResult:
-        """Build final StepResult and publish completion event."""
-        step_id = node.step_id
-
-        # Get artifact ID
-        artifact_ids = await job.execute_activity(
-            get_workflow_artifacts,
-            args=[
-                workflow_db_id,
-                self._graph.chain_name,
-                self._chain_version,
-                self._chain_id,
-            ],
-            start_to_close_timeout=timedelta(seconds=10)
-        )
-        artifact_id = artifact_ids[0] if artifact_ids else None
+            artifact_id = artifact_ids[0] if artifact_ids else None
 
         # Publish completion event with artifact ID
         if self._chain_id:
@@ -762,6 +824,31 @@ class ChainExecutorWorkflow:
                 start_to_close_timeout=timedelta(seconds=10)
             )
 
+        # Write-through step cache for successful executions.
+        if result.status == "completed":
+            structure_hash, execution_hash, runtime_fingerprint = self._compute_step_hashes(
+                node,
+                resolved_params,
+            )
+            await job.execute_activity(
+                upsert_step_cache_activity,
+                args=[
+                    execution_hash,
+                    structure_hash,
+                    node.workflow,
+                    runtime_fingerprint,
+                    result.output if isinstance(result.output, dict) else None,
+                    artifact_id,
+                    resolved_params,
+                    step_id,
+                    self._chain_id,
+                    self._graph.chain_name,
+                    self._chain_version,
+                    self._chain_id,
+                ],
+                start_to_close_timeout=timedelta(seconds=10),
+            )
+
         return StepResult(
             step_id=step_id,
             workflow=node.workflow,
@@ -770,6 +857,93 @@ class ChainExecutorWorkflow:
             parameters=resolved_params,
             server_address=result.server_address,
             workflow_db_id=workflow_db_id,
+            artifact_id=artifact_id,
+        )
+
+    async def _try_step_cache_hit(self, node) -> Optional[StepResult]:
+        """
+        Attempt per-step cache lookup before execution.
+
+        Returns:
+            StepResult with status='cached' when hit, otherwise None.
+        """
+        step_id = node.step_id
+        if node.requires_approval:
+            return None
+
+        resolved_params = await job.execute_activity(
+            resolve_chain_templates,
+            args=[
+                node.parameters,
+                self._step_results,
+                self._uploaded_inputs,
+                self._graph.chain_name,
+                self._chain_version,
+                self._chain_id,
+            ],
+            start_to_close_timeout=timedelta(seconds=10)
+        )
+        structure_hash, execution_hash, _runtime_fingerprint = self._compute_step_hashes(
+            node,
+            resolved_params,
+        )
+        cache_entry = await job.execute_activity(
+            get_step_cache_activity,
+            args=[
+                execution_hash,
+                self._graph.chain_name,
+                self._chain_version,
+                self._chain_id,
+            ],
+            start_to_close_timeout=timedelta(seconds=10),
+        )
+        if not isinstance(cache_entry, dict):
+            return None
+
+        artifact_id = cache_entry.get("artifact_id") if isinstance(cache_entry.get("artifact_id"), str) else None
+        artifact_url = cache_entry.get("artifact_url") if isinstance(cache_entry.get("artifact_url"), str) else None
+        output_json = cache_entry.get("output_json")
+        cached_workflow_db_id = await job.execute_activity(
+            create_cached_workflow_record_activity,
+            args=[
+                node.workflow,
+                self._chain_id,
+                step_id,
+                execution_hash,
+                artifact_id,
+                resolved_params,
+                self._graph.chain_name,
+                self._chain_version,
+            ],
+            start_to_close_timeout=timedelta(seconds=10),
+        )
+
+        if self._chain_id:
+            await job.execute_activity(
+                publish_step_cached_activity,
+                args=[
+                    self._chain_id,
+                    step_id,
+                    self._graph.chain_name,
+                    self._chain_version,
+                    artifact_id,
+                    artifact_url,
+                    execution_hash,
+                ],
+                start_to_close_timeout=timedelta(seconds=10),
+            )
+
+        job.logger.info(
+            f"Step {step_id}: Step-cache hit "
+            f"(structure={structure_hash[:12]}..., execution={execution_hash[:12]}...)"
+        )
+        return StepResult(
+            step_id=step_id,
+            workflow=node.workflow,
+            status="cached",
+            output=output_json if isinstance(output_json, dict) else None,
+            parameters=resolved_params,
+            workflow_db_id=cached_workflow_db_id,
             artifact_id=artifact_id,
         )
 
@@ -825,6 +999,12 @@ class ChainExecutorWorkflow:
                     break
 
             if not deps_satisfied:
+                continue
+
+            # Step-level execution cache lookup
+            cached_result = await self._try_step_cache_hit(node)
+            if cached_result:
+                results[step_id] = cached_result
                 continue
 
             # Execute step as async task

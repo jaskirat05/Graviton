@@ -21,16 +21,69 @@ interface ChainEventData {
   error?: string;
   error_type?: string;
   error_message?: string;
+  node_errors?: unknown;
   token?: string;
   artifact_url?: string;
   artifact_id?: string;
+  cache_key?: string;
   level_num?: number;
   wait_seconds?: number;
   skipped?: boolean;
 }
 
+function toErrorText(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim().length > 0) return value;
+  if (value === null || value === undefined) return fallback;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function formatNodeErrors(nodeErrors: unknown): string {
+  if (!nodeErrors || typeof nodeErrors !== "object") return "";
+  const entries = Object.entries(nodeErrors as Record<string, unknown>);
+  if (entries.length === 0) return "";
+
+  const lines: string[] = [];
+  for (const [nodeId, raw] of entries.slice(0, 10)) {
+    if (!raw || typeof raw !== "object") {
+      lines.push(`- Node ${nodeId}: validation failed`);
+      continue;
+    }
+
+    const payload = raw as { class_type?: unknown; errors?: unknown };
+    const classType =
+      typeof payload.class_type === "string" ? payload.class_type : "unknown";
+    const errors = Array.isArray(payload.errors) ? payload.errors : [];
+
+    if (errors.length === 0) {
+      lines.push(`- Node ${nodeId} (${classType}): validation failed`);
+      continue;
+    }
+
+    for (const err of errors.slice(0, 3)) {
+      if (!err || typeof err !== "object") {
+        lines.push(`- Node ${nodeId} (${classType}): validation failed`);
+        continue;
+      }
+      const e = err as { type?: unknown; message?: unknown; details?: unknown };
+      const type = typeof e.type === "string" ? e.type : "validation_error";
+      const message = typeof e.message === "string" ? e.message : "Validation failed";
+      const details = typeof e.details === "string" ? e.details : "";
+      lines.push(
+        `- Node ${nodeId} (${classType}) [${type}]: ${message}${details ? ` (${details})` : ""}`
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
+
 export function useChainEvents(chainId: string | null) {
   const eventSourceRef = useRef<EventSource | null>(null);
+  const cancelTriggeredRef = useRef(false);
 
   const {
     onStepExecuting,
@@ -38,10 +91,12 @@ export function useChainEvents(chainId: string | null) {
     onStepWorkflowComplete,
     onStepWorkflowFailed,
     onStepValidationFailed,
+    onStepCached,
     onStepCompleted,
     onApprovalRequested,
     onChainCompleted,
     onChainFailed,
+    cancelChain,
   } = useExecutionStore();
 
   const { startWait, endWait } = useLevelWaitStore();
@@ -74,23 +129,54 @@ export function useChainEvents(chainId: string | null) {
 
         case "step_workflow_failed":
           if (data.step_id) {
-            onStepWorkflowFailed(data.step_id, data.error || "Unknown error");
+            onStepWorkflowFailed(
+              data.step_id,
+              toErrorText(data.error, "Unknown error"),
+              data.node_id,
+              data.node_name
+            );
+            if (chainId && !cancelTriggeredRef.current) {
+              cancelTriggeredRef.current = true;
+              void cancelChain(chainId).catch((e) => {
+                console.error("Auto-cancel failed after step_workflow_failed:", e);
+              });
+            }
           }
           break;
 
         case "step_validation_failed":
           if (data.step_id) {
+            const baseMessage = toErrorText(
+              data.error_message,
+              "Unknown validation error"
+            );
+            const nodeDetails = formatNodeErrors(data.node_errors);
+            const fullMessage = nodeDetails
+              ? `${baseMessage}\n\nNode details:\n${nodeDetails}`
+              : baseMessage;
             onStepValidationFailed(
               data.step_id,
-              data.error_type || "validation_error",
-              data.error_message || "Unknown validation error"
+              toErrorText(data.error_type, "validation_error"),
+              fullMessage
             );
+            if (chainId && !cancelTriggeredRef.current) {
+              cancelTriggeredRef.current = true;
+              void cancelChain(chainId).catch((e) => {
+                console.error("Auto-cancel failed after step_validation_failed:", e);
+              });
+            }
           }
           break;
 
         case "step_completed":
           if (data.step_id) {
             onStepCompleted(data.step_id, data.artifact_id);
+          }
+          break;
+
+        case "step_cached":
+          if (data.step_id) {
+            onStepCached(data.step_id, data.artifact_id, data.artifact_url);
           }
           break;
 
@@ -111,7 +197,7 @@ export function useChainEvents(chainId: string | null) {
           break;
 
         case "chain_failed":
-          onChainFailed(data.error || "Unknown error");
+          onChainFailed(toErrorText(data.error, "Unknown error"));
           break;
 
         case "level_wait_started":
@@ -133,15 +219,19 @@ export function useChainEvents(chainId: string | null) {
     onStepWorkflowComplete,
     onStepWorkflowFailed,
     onStepValidationFailed,
+    onStepCached,
     onStepCompleted,
     onApprovalRequested,
     onChainCompleted,
     onChainFailed,
+    cancelChain,
+    chainId,
     startWait,
     endWait,
   ]);
 
   useEffect(() => {
+    cancelTriggeredRef.current = false;
     if (!chainId) {
       // Close existing connection if chainId becomes null
       if (eventSourceRef.current) {
@@ -169,6 +259,7 @@ export function useChainEvents(chainId: string | null) {
       "step_workflow_failed",
       "step_validation_failed",
       "step_completed",
+      "step_cached",
       "approval_requested",
       "chain_completed",
       "chain_failed",

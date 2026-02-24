@@ -99,6 +99,8 @@ export function ChainDashboard({ onClose }: ChainDashboardProps) {
     switch (status) {
       case "completed":
         return "text-green-400";
+      case "cached":
+        return "text-purple-400";
       case "running":
         return "text-blue-400";
       case "failed":
@@ -108,42 +110,40 @@ export function ChainDashboard({ onClose }: ChainDashboardProps) {
     }
   };
 
-  // Format file size
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   // Render artifact preview based on type
   const renderArtifactPreview = (artifact: Artifact) => {
     if (artifact.file_type === "image") {
       return (
-        <img
-          src={artifact.url}
-          alt={artifact.filename}
-          className="w-full h-32 object-cover rounded"
-        />
+        <div className="h-full w-full overflow-hidden rounded bg-[var(--surface-3)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={artifact.url}
+            alt={artifact.filename}
+            className="h-full w-full object-cover"
+          />
+        </div>
       );
     }
     if (artifact.file_type === "video") {
       return (
-        <VideoPlayer
-          url={artifact.url}
-          className="w-full h-32 rounded"
-        />
+        <div className="h-full w-full overflow-hidden rounded bg-black">
+          <VideoPlayer
+            url={artifact.url}
+            className="h-full w-full"
+          />
+        </div>
       );
     }
     if (artifact.file_type === "audio") {
       return (
-        <div className="w-full h-32 flex items-center justify-center bg-[var(--surface-3)] rounded">
-          <audio src={artifact.url} controls className="w-full px-2" />
+        <div className="flex h-full w-full items-center justify-center rounded bg-[var(--surface-3)] p-2">
+          <audio src={artifact.url} controls className="w-full max-w-full overflow-hidden" />
         </div>
       );
     }
     // Unknown type
     return (
-      <div className="w-full h-32 flex items-center justify-center bg-[var(--surface-3)] rounded">
+      <div className="flex h-full w-full items-center justify-center rounded bg-[var(--surface-3)]">
         <svg className="w-8 h-8 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
@@ -152,11 +152,14 @@ export function ChainDashboard({ onClose }: ChainDashboardProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-[90vw] max-w-5xl h-[80vh] bg-[var(--surface-1)] rounded-lg shadow-xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/50 p-4 md:p-6">
+      <div
+        className="flex w-[90vw] min-h-0 min-w-0 max-w-5xl flex-col overflow-hidden rounded-lg border border-white/40 bg-[var(--surface-1)] shadow-xl"
+        style={{ height: "80vh", maxHeight: "calc(100vh - 2rem)" }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
-          <div>
+        <div className="flex items-start justify-between border-b border-[var(--border)] px-8 py-6">
+          <div className="pr-4" style={{ marginLeft: "16px" }}>
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">
               {chainArtifacts.chain_name}
             </h2>
@@ -185,7 +188,7 @@ export function ChainDashboard({ onClose }: ChainDashboardProps) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6">
           {isLoadingArtifacts ? (
             <div className="flex items-center justify-center h-full">
               <div className="animate-spin w-8 h-8 border-2 border-[var(--text-muted)] border-t-transparent rounded-full" />
@@ -219,16 +222,17 @@ export function ChainDashboard({ onClose }: ChainDashboardProps) {
                     </div>
 
                     {/* Steps in this level (horizontal layout) */}
-                    <div className="flex gap-4 overflow-x-auto pb-2">
+                    <div className="flex max-w-full gap-4 overflow-x-auto pb-2">
                       {levelSteps.map((step: ChainStep) => (
                         <div
                           key={step.step_id}
-                          className="flex-shrink-0 w-72 bg-[var(--surface-2)] rounded-lg p-4"
+                          className="flex h-[22rem] w-72 min-w-0 flex-shrink-0 flex-col overflow-hidden rounded-lg bg-[var(--surface-2)] p-4"
                         >
                           {/* Step header */}
                           <div className="flex items-center gap-2 mb-3">
                             <div className={`w-2 h-2 rounded-full ${
                               step.status === "completed" ? "bg-green-500" :
+                              step.status === "cached" ? "bg-purple-500" :
                               step.status === "failed" ? "bg-red-500" :
                               step.status === "running" ? "bg-blue-500" : "bg-gray-500"
                             }`} />
@@ -249,18 +253,20 @@ export function ChainDashboard({ onClose }: ChainDashboardProps) {
 
                           {/* Artifacts */}
                           {step.artifacts.length === 0 ? (
-                            <p className="text-xs text-[var(--text-muted)] italic">
-                              No artifacts
-                            </p>
+                            <div className="mt-1 flex-1">
+                              <p className="text-xs text-[var(--text-muted)] italic">
+                                No artifacts
+                              </p>
+                            </div>
                           ) : (
-                            <div className="space-y-2">
+                            <div className="mt-1 flex-1 space-y-2 overflow-y-auto overflow-x-hidden pr-1">
                               {step.artifacts.slice(0, 2).map((artifact: Artifact) => (
                                 <a
                                   key={artifact.id}
                                   href={artifact.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="block relative group"
+                                  className="group relative block h-32 overflow-hidden rounded"
                                 >
                                   {renderArtifactPreview(artifact)}
                                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded">

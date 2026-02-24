@@ -29,6 +29,9 @@ dependencies = [
     "sse-starlette>=1.6.0",
     "httpx-sse>=0.4.0",
     "psycopg2-binary>=2.9.0",
+    "nats-py>=2.7.2",
+    "redis>=5.0.0",
+    "python-dotenv>=1.0.1",
 ]
 
 [project.scripts]

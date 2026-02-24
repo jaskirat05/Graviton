@@ -45,7 +45,7 @@ class StepResult:
 
     def is_successful(self) -> bool:
         """Check if step completed successfully"""
-        return self.status == "completed"
+        return self.status in {"completed", "cached"}
 
     def is_failed(self) -> bool:
         """Check if step failed"""

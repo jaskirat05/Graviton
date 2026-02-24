@@ -174,6 +174,14 @@ class ComfyUIClient:
         """
         return await self.http.get_models_by_category(category)
 
+    async def list_bridge_templates(self) -> Dict[str, Any]:
+        """List template files exposed by graviton_bridge."""
+        return await self.http.list_bridge_templates()
+
+    async def download_bridge_template(self, filename: str) -> bytes:
+        """Download a template file via graviton_bridge."""
+        return await self.http.download_bridge_template(filename)
+
     async def get_embeddings(self) -> list[str]:
         """Get list of available embeddings"""
         return await self.http.get_embeddings()

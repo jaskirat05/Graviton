@@ -9,7 +9,12 @@ import { useChainStore, type ChainName, type ChainVersion, type ChainArtifacts }
 
 interface ChainsSidebarProps {
   onViewDashboard: (chainId: string) => void;
-  onLoadChain: (chainId: string, definition: Record<string, unknown>, artifacts: ChainArtifacts) => void;
+  onLoadChain: (
+    chainId: string,
+    definition: Record<string, unknown>,
+    artifacts: ChainArtifacts,
+    definitionHash?: string | null
+  ) => void;
   onNewChain: () => void;
 }
 
@@ -102,7 +107,7 @@ export function ChainsSidebar({ onViewDashboard, onLoadChain, onNewChain }: Chai
     if (defResult?.definition && chainArtifacts) {
       // Use executed_definition if available, otherwise fall back to original
       const definition = defResult.executed_definition ?? defResult.definition;
-      onLoadChain(chainId, definition, chainArtifacts);
+      onLoadChain(chainId, definition, chainArtifacts, defResult.definition_hash ?? null);
     }
   };
 

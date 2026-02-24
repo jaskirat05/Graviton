@@ -1,15 +1,9 @@
-"""
-Activity: Select best available server
-
-Uses the server registry and load balancer to select
-the best available ComfyUI server based on queue depth.
-"""
+"""Activity: Select best available server from registry-service projection."""
 
 from typing import Optional
 from temporalio import activity
 
-from ..servers import ServerRegistry, LoadBalancer
-from ..servers.load_balancer import NoServersAvailableError
+from core.registry_service.projection import ProjectionStore
 from ..observability.chain_logger import ChainLogger
 
 
@@ -50,28 +44,46 @@ async def select_best_server(
 
     log(f"Selecting server with strategy: {strategy}")
 
-    registry = ServerRegistry.get_instance()
-
-    # Handle specific server selection
-    if strategy == "specific" and server_name:
-        server_info = registry.get_server_by_name(server_name)
-        if not server_info:
-            log(f"Server '{server_name}' not found", "error")
-            raise Exception(f"Server '{server_name}' not found in registry")
-
-        log(f"Selected specific server: {server_info.name} ({server_info.http_url})")
-        return server_info.http_url
-
-    # Fall back to load balancing
-    load_balancer = LoadBalancer(registry)
-
+    store = ProjectionStore()
+    await store.connect()
     try:
-        server_info = await load_balancer.select_server()
+        def _to_url(address: str, port: Optional[int], ssl: bool) -> str:
+            if address.startswith(("http://", "https://")):
+                base = address.rstrip("/")
+            else:
+                scheme = "https" if ssl else "http"
+                base = f"{scheme}://{address}"
+            host_part = base.split("//", 1)[1]
+            if port and ":" not in host_part:
+                base = f"{base}:{port}"
+            return base
 
-        log(f"Selected server: {server_info.name} ({server_info.http_url})")
+        if strategy == "specific" and server_name:
+            server = await store.get_server_by_name(server_name)
+            if not server:
+                log(f"Server '{server_name}' not found", "error")
+                raise Exception(f"Server '{server_name}' not found in registry")
+            url = _to_url(server.address, server.port, server.ssl)
+            log(f"Selected specific server: {server.name} ({url})")
+            return url
 
-        return server_info.http_url
+        candidates = []
+        for server in await store.list_servers():
+            if server.status != "registered":
+                continue
+            health = await store.get_health(server.id)
+            if not health or health.health_state not in {"healthy", "degraded"}:
+                continue
+            queue_depth = health.queue_depth if health.queue_depth is not None else 10**9
+            candidates.append((queue_depth, server))
 
-    except NoServersAvailableError as e:
-        log(f"No servers available: {e}", "error")
-        raise Exception(f"No servers available: {e}")
+        if not candidates:
+            raise Exception("No healthy/degraded registered servers available")
+
+        candidates.sort(key=lambda item: item[0])
+        selected = candidates[0][1]
+        url = _to_url(selected.address, selected.port, selected.ssl)
+        log(f"Selected server: {selected.name} ({url})")
+        return url
+    finally:
+        await store.close()

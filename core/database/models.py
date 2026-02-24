@@ -141,8 +141,8 @@ class Artifact(Base):
 
     # File info
     filename = Column(String, nullable=False)  # Original ComfyUI filename
-    local_filename = Column(String, nullable=False, unique=True)  # Unique local filename
-    local_path = Column(String, nullable=False, unique=True)  # Full path
+    local_filename = Column(String, nullable=True, unique=True)  # Unique local filename (optional for remote-only artifacts)
+    local_path = Column(String, nullable=True, unique=True)  # Full path (optional for remote-only artifacts)
     file_type = Column(String, nullable=False)  # 'image', 'video'
     file_format = Column(String)  # 'png', 'mp4', 'jpg'
     file_size = Column(Integer)  # Bytes
@@ -183,6 +183,36 @@ class Artifact(Base):
 
     def __repr__(self):
         return f"<Artifact(id={self.id}, filename={self.filename}, version={self.version})>"
+
+
+class StepCache(Base):
+    """Per-step execution cache keyed by deterministic execution hash."""
+
+    __tablename__ = "step_cache"
+
+    execution_hash = Column(String(64), primary_key=True)  # full sha256 hex
+    structure_hash = Column(String(64), nullable=False, index=True)
+    workflow_name = Column(String, nullable=False, index=True)
+    runtime_fingerprint = Column(String, nullable=False, index=True)
+
+    artifact_id = Column(String, ForeignKey("artifacts.id", ondelete="SET NULL"))
+    output_json = Column(JSON)
+    step_parameters = Column(JSON)
+
+    source_step_id = Column(String)
+    source_chain_id = Column(String, ForeignKey("chains.id", ondelete="SET NULL"))
+
+    created_at = Column(DateTime, nullable=False, default=func.now())
+    last_hit_at = Column(DateTime, nullable=False, default=func.now())
+    hit_count = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        Index("idx_step_cache_workflow_runtime", "workflow_name", "runtime_fingerprint"),
+        Index("idx_step_cache_last_hit", "last_hit_at"),
+    )
+
+    def __repr__(self):
+        return f"<StepCache(execution_hash={self.execution_hash[:12]}..., workflow={self.workflow_name})>"
 
 
 class ArtifactTransfer(Base):

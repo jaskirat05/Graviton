@@ -43,14 +43,15 @@ async def apply_workflow_parameters(
         if chain_logger:
             getattr(chain_logger.worker, level)(msg)
 
-    # Lazy import to avoid circular dependency
-    from core.workflow_registry import get_registry
+    # Lazy imports to avoid circular dependency
+    from core.registry_service.template_manager import TemplateManager
+    from core.registry_service.template_store import TemplateStore
 
     log(f"Applying parameters to workflow: {workflow_name}")
 
     try:
-        registry = get_registry()
-        workflow_json = registry.apply_overrides(workflow_name, parameters)
+        manager = TemplateManager(TemplateStore())
+        workflow_json = manager.apply_runtime_overrides(workflow_name, parameters)
 
         log(f"Parameters applied successfully")
         return workflow_json

@@ -4,6 +4,8 @@
 
 import { create } from "zustand";
 
+const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8001";
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -13,6 +15,7 @@ export type StepStatus =
   | "executing"
   | "waiting_approval"
   | "completed"
+  | "cached"
   | "failed";
 
 export interface StepExecution {
@@ -20,6 +23,8 @@ export interface StepExecution {
   progress?: number;        // 0-1 during execution
   currentNode?: string;     // ComfyUI node ID being executed
   currentNodeName?: string; // ComfyUI node name being executed
+  failedNodeId?: string;    // ComfyUI node ID that caused failure
+  failedNodeName?: string;  // ComfyUI node name that caused failure
   error?: string;           // Error message if failed
   outputCount?: number;     // Number of outputs
   artifactUrl?: string;     // URL to view output
@@ -43,12 +48,24 @@ export interface ChainExecution {
   error?: string;
 }
 
+export interface FatalExecutionError {
+  isOpen: boolean;
+  message: string;
+  stepId?: string;
+}
+
 export interface HistoricalStep {
   stepId: string;
   status: string;
   artifactUrl?: string;
   artifactId?: string;
   error?: string;
+}
+
+export interface CachedStepUpdate {
+  stepId: string;
+  artifactUrl?: string;
+  artifactId?: string;
 }
 
 // =============================================================================
@@ -61,11 +78,14 @@ interface ExecutionStore {
 
   // Update mode state - node ID that is requesting parameter update
   updateModeNodeId: string | null;
+  fatalError: FatalExecutionError | null;
 
   // Actions
   startExecution: (chainId: string, jobId: string, stepIds: string[]) => void;
   loadFromHistory: (chainId: string, status: "completed" | "failed", steps: HistoricalStep[]) => void;
+  markStepsCached: (steps: CachedStepUpdate[]) => void;
   clearExecution: () => void;
+  closeFatalError: () => void;
 
   // Update mode actions
   requestUpdateMode: (nodeId: string) => void;
@@ -75,8 +95,9 @@ interface ExecutionStore {
   onStepExecuting: (stepId: string, workflow: string, server: string) => void;
   onStepNode: (stepId: string, nodeId: string, nodeName?: string, progress?: number) => void;
   onStepWorkflowComplete: (stepId: string, outputCount: number) => void;
-  onStepWorkflowFailed: (stepId: string, error: string) => void;
+  onStepWorkflowFailed: (stepId: string, error: string, nodeId?: string, nodeName?: string) => void;
   onStepValidationFailed: (stepId: string, errorType: string, errorMessage: string) => void;
+  onStepCached: (stepId: string, artifactId?: string, artifactUrl?: string) => void;
   onStepCompleted: (stepId: string, artifactId?: string) => void;
   onApprovalRequested: (stepId: string, token: string, workflow: string, artifactUrl: string, artifactId: string) => void;
   onApprovalResolved: (stepId: string) => void;
@@ -96,11 +117,13 @@ interface ExecutionStore {
   getPendingSteps: (chainId: string) => Promise<string[]>;
   skipLevelWait: (chainId: string, levelNum?: number) => Promise<void>;
   cancelChain: (chainId: string) => Promise<void>;
+  abortAllChains: () => Promise<{ requested_count: number; cancelled_count: number }>;
 }
 
 export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   execution: null,
   updateModeNodeId: null,
+  fatalError: null,
 
   requestUpdateMode: (nodeId) => set({ updateModeNodeId: nodeId }),
   clearUpdateMode: () => set({ updateModeNodeId: null }),
@@ -122,13 +145,22 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   },
 
   clearExecution: () => set({ execution: null }),
+  closeFatalError: () => set({ fatalError: null }),
 
   loadFromHistory: (chainId, status, steps) => {
     const stepExecution: Record<string, StepExecution> = {};
     for (const step of steps) {
+      const normalizedStatus: StepStatus =
+        step.status === "completed"
+          ? "completed"
+          : step.status === "failed"
+            ? "failed"
+            : step.status === "cached"
+              ? "cached"
+              : "idle";
       stepExecution[step.stepId] = {
-        status: step.status === "completed" ? "completed" : step.status === "failed" ? "failed" : "idle",
-        progress: step.status === "completed" ? 1 : 0,
+        status: normalizedStatus,
+        progress: normalizedStatus === "completed" || normalizedStatus === "cached" ? 1 : 0,
         artifactUrl: step.artifactUrl,
         artifactId: step.artifactId,
         error: step.error,
@@ -145,7 +177,33 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     });
   },
 
-  onStepExecuting: (stepId, workflow, server) => {
+  markStepsCached: (steps) => {
+    set((state) => {
+      if (!state.execution || steps.length === 0) return state;
+      const nextSteps = { ...state.execution.steps };
+      for (const step of steps) {
+        const existing = nextSteps[step.stepId] || { status: "idle" as StepStatus };
+        if (existing.status === "failed") {
+          continue;
+        }
+        nextSteps[step.stepId] = {
+          ...existing,
+          status: "cached",
+          progress: 1,
+          artifactUrl: step.artifactUrl ?? existing.artifactUrl,
+          artifactId: step.artifactId ?? existing.artifactId,
+        };
+      }
+      return {
+        execution: {
+          ...state.execution,
+          steps: nextSteps,
+        },
+      };
+    });
+  },
+
+  onStepExecuting: (stepId) => {
     set((state) => {
       if (!state.execution) return state;
       return {
@@ -204,20 +262,31 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     });
   },
 
-  onStepWorkflowFailed: (stepId, error) => {
+  onStepWorkflowFailed: (stepId, error, nodeId, nodeName) => {
     set((state) => {
       if (!state.execution) return state;
       return {
         execution: {
           ...state.execution,
+          status: "failed",
+          error,
           steps: {
             ...state.execution.steps,
             [stepId]: {
               ...state.execution.steps[stepId],
               status: "failed",
+              failedNodeId: nodeId,
+              failedNodeName: nodeName,
+              currentNode: nodeId || state.execution.steps[stepId]?.currentNode,
+              currentNodeName: nodeName || state.execution.steps[stepId]?.currentNodeName,
               error,
             },
           },
+        },
+        fatalError: {
+          isOpen: true,
+          message: error,
+          stepId,
         },
       };
     });
@@ -226,6 +295,40 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   onStepValidationFailed: (stepId, errorType, errorMessage) => {
     set((state) => {
       if (!state.execution) return state;
+      const message = `${errorType}: ${errorMessage}`;
+      return {
+        execution: {
+          ...state.execution,
+          status: "failed",
+          error: message,
+          steps: {
+            ...state.execution.steps,
+            [stepId]: {
+              ...state.execution.steps[stepId],
+              status: "failed",
+              error: message,
+            },
+          },
+        },
+        fatalError: {
+          isOpen: true,
+          message,
+          stepId,
+        },
+      };
+    });
+  },
+
+  onStepCached: (stepId, artifactId, artifactUrl) => {
+    set((state) => {
+      if (!state.execution) return state;
+      const normalizedUrl =
+        typeof artifactUrl === "string" && artifactUrl.startsWith("/")
+          ? `${GATEWAY_URL}${artifactUrl}`
+          : artifactUrl;
+      const resolvedUrl =
+        normalizedUrl ||
+        (artifactId ? `${GATEWAY_URL}/artifact-service/artifacts/${artifactId}/download` : undefined);
       return {
         execution: {
           ...state.execution,
@@ -233,8 +336,10 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
             ...state.execution.steps,
             [stepId]: {
               ...state.execution.steps[stepId],
-              status: "failed",
-              error: `${errorType}: ${errorMessage}`,
+              status: "cached",
+              progress: 1,
+              artifactId: artifactId ?? state.execution.steps[stepId]?.artifactId,
+              artifactUrl: resolvedUrl ?? state.execution.steps[stepId]?.artifactUrl,
             },
           },
         },
@@ -245,7 +350,10 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   onStepCompleted: (stepId, artifactId) => {
     set((state) => {
       if (!state.execution) return state;
-      const gatewayUrl = "http://localhost:8001"; // TODO: Make configurable
+      const currentStep = state.execution.steps[stepId];
+      if (currentStep?.status === "failed") {
+        return state;
+      }
       return {
         execution: {
           ...state.execution,
@@ -256,7 +364,9 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
               status: "completed",
               progress: 1,
               artifactId,
-              artifactUrl: artifactId ? `${gatewayUrl}/artifacts/${artifactId}` : undefined,
+              artifactUrl: artifactId
+                ? `${GATEWAY_URL}/artifact-service/artifacts/${artifactId}/download`
+                : undefined,
             },
           },
         },
@@ -305,10 +415,11 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   onChainCompleted: () => {
     set((state) => {
       if (!state.execution) return state;
+      const hasFailedStep = Object.values(state.execution.steps).some((step) => step.status === "failed");
       return {
         execution: {
           ...state.execution,
-          status: "completed",
+          status: hasFailedStep ? "failed" : "completed",
         },
       };
     });
@@ -333,7 +444,6 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     get().execution?.pendingApprovals.find((a) => a.stepId === stepId),
 
   updateStepParameters: async (chainId, stepId, parameters) => {
-    const GATEWAY_URL = "http://localhost:8001";
     const response = await fetch(
       `${GATEWAY_URL}/chains/${chainId}/steps/${stepId}/update-parameters`,
       {
@@ -349,7 +459,6 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   },
 
   getPendingSteps: async (chainId) => {
-    const GATEWAY_URL = "http://localhost:8001";
     const response = await fetch(`${GATEWAY_URL}/chains/${chainId}/pending-steps`);
     if (!response.ok) {
       throw new Error("Failed to get pending steps");
@@ -359,7 +468,6 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   },
 
   skipLevelWait: async (chainId, levelNum) => {
-    const GATEWAY_URL = "http://localhost:8001";
     const url = new URL(`${GATEWAY_URL}/chains/${chainId}/skip-level-wait`);
     if (levelNum !== undefined) {
       url.searchParams.set("level_num", levelNum.toString());
@@ -371,7 +479,6 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   },
 
   cancelChain: async (chainId) => {
-    const GATEWAY_URL = "http://localhost:8001";
     const response = await fetch(`${GATEWAY_URL}/chains/${chainId}/cancel`, {
       method: "POST",
     });
@@ -379,5 +486,20 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       const error = await response.json().catch(() => ({ detail: "Unknown error" }));
       throw new Error(error.detail || "Failed to cancel chain");
     }
+  },
+
+  abortAllChains: async () => {
+    const response = await fetch(`${GATEWAY_URL}/chains/abort-all`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Unknown error" }));
+      throw new Error(error.detail || "Failed to abort all chains");
+    }
+    const payload = await response.json();
+    return {
+      requested_count: Number(payload?.requested_count || 0),
+      cancelled_count: Number(payload?.cancelled_count || 0),
+    };
   },
 }));

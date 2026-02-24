@@ -14,6 +14,7 @@ from .chain_executor import (
     ChainExecutorWorkflow,
     ChainExecutionRequest,
 )
+from .control_plane_fanout import ControlPlaneFanoutWorkflow
 
 __all__ = [
     "ComfyUIWorkflow",
@@ -21,4 +22,5 @@ __all__ = [
     "WorkflowExecutionResult",
     "ChainExecutorWorkflow",
     "ChainExecutionRequest",
+    "ControlPlaneFanoutWorkflow",
 ]

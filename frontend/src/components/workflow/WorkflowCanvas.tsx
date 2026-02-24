@@ -4,37 +4,39 @@
  * WorkflowCanvas - Main workflow editor component using ReactFlow
  */
 
-import { useCallback, useState, useRef, useEffect, useMemo } from "react";
+import { useCallback, useRef, useEffect, useMemo } from "react";
 import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
   addEdge,
   useNodesState,
   useEdgesState,
   type Connection,
   type NodeTypes,
   type EdgeTypes,
-  BackgroundVariant,
-  Panel,
   type OnSelectionChangeParams,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 import { WorkflowNode } from "./WorkflowNode";
 import { WorkflowEdge } from "./WorkflowEdge";
-import { ContextMenu } from "./ContextMenu";
-import { NodePropertiesPanel } from "./NodePropertiesPanel";
+import { WorkflowToolbar } from "./WorkflowToolbar";
+import { WorkflowGraph } from "./WorkflowGraph";
+import { WorkflowSidePanels } from "./WorkflowSidePanels";
+import { WorkflowOverlays } from "./WorkflowOverlays";
 import { ChainsSidebar } from "../chains/ChainsSidebar";
-import { ChainDashboard } from "../chains/ChainDashboard";
 import { LevelWaitBar } from "./LevelWaitBar";
 import { useNodeStore } from "@/stores/nodeStore";
 import { useExecutionStore } from "@/stores/executionStore";
 import { useChainStore } from "@/stores/chainStore";
+import { useServerStore } from "@/stores/serverStore";
+import { useChainExecutionStore } from "@/stores/chainExecutionStore";
 import { useChainEvents } from "@/hooks/useChainEvents";
+import { useComfyServerUrl } from "@/hooks/useComfyServerUrl";
+import { useRegistryEvents } from "@/hooks/useRegistryEvents";
+import { useWorkflowEditorStore } from "@/stores/workflowEditorStore";
 import { toChainDefinition, fromChainDefinition } from "./chainUtils";
-import type { WorkflowNode as WorkflowNodeType, WorkflowEdge as WorkflowEdgeType, WorkflowNodeData, ChainDefinition } from "./types";
+import { sanitizeWorkflowStepId, isConnectionTypeCompatible } from "./canvasUtils";
+import { useNewWorkflowBridge } from "./hooks/useNewWorkflowBridge";
+import type { WorkflowNode as WorkflowNodeType, WorkflowEdge as WorkflowEdgeType, ChainDefinition } from "./types";
 
 // Register custom node and edge types
 const nodeTypes: NodeTypes = {
@@ -48,52 +50,298 @@ const edgeTypes: EdgeTypes = {
 // Initial empty state
 const initialNodes: WorkflowNodeType[] = [];
 const initialEdges: WorkflowEdgeType[] = [];
+const WORKFLOW_DRAFT_STORAGE_KEY = "graviton.workflowCanvasDraft.v1";
+const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8001";
+
+function toErrorText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return undefined;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function collectRerunStepIds(fromStepId: string, edges: WorkflowEdgeType[]): Set<string> {
+  const rerunStepIds = new Set<string>([fromStepId]);
+  const queue: string[] = [fromStepId];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+    for (const edge of edges) {
+      if (edge.source !== current) continue;
+      const next = edge.target;
+      if (!next || rerunStepIds.has(next)) continue;
+      rerunStepIds.add(next);
+      queue.push(next);
+    }
+  }
+
+  return rerunStepIds;
+}
 
 export function WorkflowCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Selected node for properties panel
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  // Update mode - when true, the properties panel shows "Update Parameters" button
-  const [updateMode, setUpdateMode] = useState(false);
-
   // Node store
   const nodeStore = useNodeStore();
-  const { fetchWorkflows, getNodeDefinition, isLoading, error } = nodeStore;
+  const { fetchWorkflows, getNodeDefinition, nodeDefinitions, isLoading, error } = nodeStore;
 
   // Execution store
   const execution = useExecutionStore((state) => state.execution);
   const startExecution = useExecutionStore((state) => state.startExecution);
+  const markStepsCached = useExecutionStore((state) => state.markStepsCached);
   const clearExecution = useExecutionStore((state) => state.clearExecution);
   const cancelChain = useExecutionStore((state) => state.cancelChain);
+  const abortAllChains = useExecutionStore((state) => state.abortAllChains);
   const updateModeNodeId = useExecutionStore((state) => state.updateModeNodeId);
   const clearUpdateMode = useExecutionStore((state) => state.clearUpdateMode);
   const updateStepParameters = useExecutionStore((state) => state.updateStepParameters);
+  const fatalExecutionError = useExecutionStore((state) => state.fatalError);
+  const closeFatalExecutionError = useExecutionStore((state) => state.closeFatalError);
+  const servers = useServerStore((state) => state.servers);
+  const fetchServers = useServerStore((state) => state.fetchServers);
+  const getComfyServerUrl = useComfyServerUrl();
 
   // Chain store
-  const sidebarOpen = useChainStore((state) => state.sidebarOpen);
   const currentChainName = useChainStore((state) => state.currentChainName);
   const setCurrentChainName = useChainStore((state) => state.setCurrentChainName);
   const fetchChainNames = useChainStore((state) => state.fetchChainNames);
+  const selectVersion = useChainStore((state) => state.selectVersion);
 
-  // Dashboard state
-  const [showDashboard, setShowDashboard] = useState(false);
-
-  // Wait before execution state
-  const [waitEnabled, setWaitEnabled] = useState(false);
-  const [waitSeconds, setWaitSeconds] = useState(0);
-
-  // Track chain ID for SSE subscription
-  const [chainId, setChainId] = useState<string | null>(null);
+  // Workflow editor UI store
+  const selectedNodeId = useWorkflowEditorStore((state) => state.selectedNodeId);
+  const setSelectedNodeId = useWorkflowEditorStore((state) => state.setSelectedNodeId);
+  const updateMode = useWorkflowEditorStore((state) => state.updateMode);
+  const setUpdateMode = useWorkflowEditorStore((state) => state.setUpdateMode);
+  const showDashboard = useWorkflowEditorStore((state) => state.showDashboard);
+  const setShowDashboard = useWorkflowEditorStore((state) => state.setShowDashboard);
+  const showSettings = useWorkflowEditorStore((state) => state.showSettings);
+  const setShowSettings = useWorkflowEditorStore((state) => state.setShowSettings);
+  const waitEnabled = useWorkflowEditorStore((state) => state.waitEnabled);
+  const setWaitEnabled = useWorkflowEditorStore((state) => state.setWaitEnabled);
+  const waitSeconds = useWorkflowEditorStore((state) => state.waitSeconds);
+  const setWaitSeconds = useWorkflowEditorStore((state) => state.setWaitSeconds);
+  const chainId = useWorkflowEditorStore((state) => state.chainId);
+  const setChainId = useWorkflowEditorStore((state) => state.setChainId);
+  const definitionSignature = useWorkflowEditorStore((state) => state.definitionSignature);
+  const setDefinitionSignature = useWorkflowEditorStore((state) => state.setDefinitionSignature);
+  const contextMenu = useWorkflowEditorStore((state) => state.contextMenu);
+  const setContextMenu = useWorkflowEditorStore((state) => state.setContextMenu);
+  const exportOutput = useWorkflowEditorStore((state) => state.exportOutput);
+  const setExportOutput = useWorkflowEditorStore((state) => state.setExportOutput);
+  const resetForNewChain = useWorkflowEditorStore((state) => state.resetForNewChain);
+  const isNewWorkflowEditorOpen = useWorkflowEditorStore((state) => state.isNewWorkflowEditorOpen);
+  const setIsNewWorkflowEditorOpen = useWorkflowEditorStore((state) => state.setIsNewWorkflowEditorOpen);
+  const isOpeningNewWorkflowEditor = useWorkflowEditorStore((state) => state.isOpeningNewWorkflowEditor);
+  const setIsOpeningNewWorkflowEditor = useWorkflowEditorStore((state) => state.setIsOpeningNewWorkflowEditor);
+  const isSavingNewWorkflow = useWorkflowEditorStore((state) => state.isSavingNewWorkflow);
+  const setIsSavingNewWorkflow = useWorkflowEditorStore((state) => state.setIsSavingNewWorkflow);
+  const newWorkflowError = useWorkflowEditorStore((state) => state.newWorkflowError);
+  const setNewWorkflowError = useWorkflowEditorStore((state) => state.setNewWorkflowError);
+  const newWorkflowBridgeStatus = useWorkflowEditorStore((state) => state.newWorkflowBridgeStatus);
+  const setNewWorkflowBridgeStatus = useWorkflowEditorStore((state) => state.setNewWorkflowBridgeStatus);
+  const newWorkflowBaseUrl = useWorkflowEditorStore((state) => state.newWorkflowBaseUrl);
+  const setNewWorkflowBaseUrl = useWorkflowEditorStore((state) => state.setNewWorkflowBaseUrl);
+  const newWorkflowName = useWorkflowEditorStore((state) => state.newWorkflowName);
+  const setNewWorkflowName = useWorkflowEditorStore((state) => state.setNewWorkflowName);
+  const newWorkflowServerName = useWorkflowEditorStore((state) => state.newWorkflowServerName);
+  const setNewWorkflowServerName = useWorkflowEditorStore((state) => state.setNewWorkflowServerName);
+  const resetNewWorkflowEditor = useWorkflowEditorStore((state) => state.resetNewWorkflowEditor);
+  const executeWithCache = useChainExecutionStore((state) => state.executeWithCache);
 
   // Subscribe to SSE events for execution updates
   const { disconnect } = useChainEvents(chainId);
+  useRegistryEvents(fetchWorkflows);
 
   // Fetch workflows on mount
   useEffect(() => {
     fetchWorkflows();
   }, [fetchWorkflows]);
+
+  // Reconcile existing canvas nodes whenever registry node definitions change.
+  // This keeps edited/deleted template nodes in sync without manual re-add.
+  useEffect(() => {
+    setNodes((currentNodes) => {
+      let changed = false;
+
+      const reconciled = currentNodes.map((node) => {
+        const data = node.data as WorkflowNodeData;
+        if (!data?.type) return node;
+
+        const latest = getNodeDefinition(data.type);
+        if (!latest) {
+          const missingError = `Template '${data.type}' no longer exists in registry.`;
+          const alreadyMissing =
+            data.definition?.category === "invalid" &&
+            data.serverValidation?.valid === false &&
+            data.serverValidation?.error === missingError;
+
+          if (alreadyMissing) {
+            return node;
+          }
+
+          changed = true;
+          return {
+            ...node,
+            data: {
+              ...data,
+              definition: {
+                ...data.definition,
+                category: "invalid",
+                description: missingError,
+              },
+              serverValidation: {
+                valid: false,
+                error: missingError,
+              },
+            },
+          };
+        }
+
+        const currentParams = data.parameters || {};
+        const nextParams: Record<string, string | number> = {};
+        for (const param of latest.inputParameters) {
+          const currentValue = currentParams[param.id];
+          if (typeof currentValue === "string" || typeof currentValue === "number") {
+            nextParams[param.id] = currentValue;
+          } else if (param.default !== undefined) {
+            nextParams[param.id] = param.default;
+          }
+        }
+
+        const prevKeys = Object.keys(currentParams).sort();
+        const nextKeys = Object.keys(nextParams).sort();
+        const paramsChanged =
+          prevKeys.length !== nextKeys.length ||
+          prevKeys.some((key, index) => key !== nextKeys[index]) ||
+          nextKeys.some((key) => currentParams[key] !== nextParams[key]);
+
+        const definitionChanged =
+          data.definition.type !== latest.type ||
+          data.definition.label !== latest.label ||
+          data.definition.color !== latest.color ||
+          data.definition.category !== latest.category ||
+          data.definition.description !== latest.description ||
+          data.definition.inputParameters.length !== latest.inputParameters.length ||
+          data.definition.inputs.length !== latest.inputs.length ||
+          data.definition.outputs.length !== latest.outputs.length;
+
+        const labelChanged = data.label !== latest.label;
+        const colorChanged = data.color !== latest.color;
+
+        if (!paramsChanged && !definitionChanged && !labelChanged && !colorChanged) {
+          return node;
+        }
+
+        changed = true;
+        return {
+          ...node,
+          data: {
+            ...data,
+            label: latest.label,
+            color: latest.color,
+            definition: latest,
+            parameters: nextParams,
+          },
+        };
+      });
+
+      return changed ? reconciled : currentNodes;
+    });
+  }, [getNodeDefinition, nodeDefinitions, setNodes]);
+
+  // Restore workflow draft after refresh.
+  useEffect(() => {
+    if (draftHydratedRef.current) return;
+    try {
+      const raw = window.localStorage.getItem(WORKFLOW_DRAFT_STORAGE_KEY);
+      if (!raw) {
+        draftHydratedRef.current = true;
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as {
+        chainName?: string;
+        definitionSignature?: string | null;
+        nodes?: WorkflowNodeType[];
+        edges?: WorkflowEdgeType[];
+        waitEnabled?: boolean;
+        waitSeconds?: number;
+      };
+
+      if (typeof parsed.chainName === "string" && parsed.chainName.trim()) {
+        setCurrentChainName(parsed.chainName);
+      }
+      if (
+        parsed.definitionSignature === null ||
+        (typeof parsed.definitionSignature === "string" && parsed.definitionSignature.trim())
+      ) {
+        setDefinitionSignature(parsed.definitionSignature ?? null);
+      }
+      if (Array.isArray(parsed.nodes)) {
+        setNodes(parsed.nodes);
+      }
+      if (Array.isArray(parsed.edges)) {
+        setEdges(parsed.edges);
+      }
+      if (typeof parsed.waitEnabled === "boolean") {
+        setWaitEnabled(parsed.waitEnabled);
+      }
+      if (typeof parsed.waitSeconds === "number" && Number.isFinite(parsed.waitSeconds)) {
+        setWaitSeconds(Math.max(0, parsed.waitSeconds));
+      }
+    } catch (error) {
+      console.error("Failed to restore workflow draft from localStorage:", error);
+    } finally {
+      draftHydratedRef.current = true;
+    }
+  }, [setCurrentChainName, setDefinitionSignature, setEdges, setNodes, setWaitEnabled, setWaitSeconds]);
+
+  // Persist workflow draft during edits.
+  useEffect(() => {
+    if (!draftHydratedRef.current) return;
+    if (persistTimerRef.current !== null) {
+      window.clearTimeout(persistTimerRef.current);
+    }
+
+    persistTimerRef.current = window.setTimeout(() => {
+      try {
+        const payload = {
+          chainName: currentChainName,
+          definitionSignature,
+          nodes,
+          edges,
+          waitEnabled,
+          waitSeconds,
+        };
+        window.localStorage.setItem(WORKFLOW_DRAFT_STORAGE_KEY, JSON.stringify(payload));
+      } catch (error) {
+        console.error("Failed to persist workflow draft to localStorage:", error);
+      }
+    }, 250);
+
+    return () => {
+      if (persistTimerRef.current !== null) {
+        window.clearTimeout(persistTimerRef.current);
+      }
+    };
+  }, [currentChainName, definitionSignature, edges, nodes, waitEnabled, waitSeconds]);
+
+  useEffect(() => {
+    if (servers.length === 0) {
+      void fetchServers();
+    }
+  }, [servers.length, fetchServers]);
+
+  useEffect(() => {
+    if (!newWorkflowServerName && servers.length > 0) {
+      setNewWorkflowServerName(servers[0].name);
+    }
+  }, [newWorkflowServerName, servers, setNewWorkflowServerName]);
 
   // Watch for update mode requests from nodes
   useEffect(() => {
@@ -108,7 +356,7 @@ export function WorkflowCanvas() {
       }
       clearUpdateMode(); // Clear the request after handling
     }
-  }, [updateModeNodeId, clearUpdateMode, selectedNodeId, updateMode]);
+  }, [updateModeNodeId, clearUpdateMode, selectedNodeId, updateMode, setSelectedNodeId, setUpdateMode]);
 
   // Listen for server change events from nodes
   useEffect(() => {
@@ -154,21 +402,42 @@ export function WorkflowCanvas() {
   // Get selected node data
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) return null;
-    return nodes.find((n) => n.id === selectedNodeId);
+    return nodes.find((n) => n.id === selectedNodeId) ?? null;
   }, [selectedNodeId, nodes]);
 
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState<{
-    show: boolean;
-    position: { x: number; y: number };
-    flowPosition: { x: number; y: number };
-  }>({ show: false, position: { x: 0, y: 0 }, flowPosition: { x: 0, y: 0 } });
+  const newWorkflowIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const newWorkflowPingTimerRef = useRef<number | null>(null);
+  const draftHydratedRef = useRef(false);
+  const persistTimerRef = useRef<number | null>(null);
 
-  // Export output state
-  const [exportOutput, setExportOutput] = useState<string>("");
+  const selectedNewWorkflowServer = useMemo(
+    () => servers.find((server) => server.name === newWorkflowServerName) || null,
+    [servers, newWorkflowServerName]
+  );
+  const newWorkflowOrigin = useMemo(() => {
+    if (!newWorkflowBaseUrl) return null;
+    try {
+      return new URL(newWorkflowBaseUrl).origin;
+    } catch {
+      return null;
+    }
+  }, [newWorkflowBaseUrl]);
 
-  const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+  useEffect(() => {
+    if (!isNewWorkflowEditorOpen || !selectedNewWorkflowServer) {
+      return;
+    }
+    setNewWorkflowError(null);
+    setNewWorkflowBridgeStatus("waiting-iframe-ready");
+    setNewWorkflowBaseUrl(getComfyServerUrl(selectedNewWorkflowServer));
+  }, [
+    getComfyServerUrl,
+    isNewWorkflowEditorOpen,
+    selectedNewWorkflowServer,
+    setNewWorkflowBaseUrl,
+    setNewWorkflowBridgeStatus,
+    setNewWorkflowError,
+  ]);
 
   // Handle selection change
   const onSelectionChange = useCallback(({ nodes: selectedNodes }: OnSelectionChangeParams) => {
@@ -179,38 +448,11 @@ export function WorkflowCanvas() {
       setSelectedNodeId(null);
       setUpdateMode(false);
     }
-  }, []);
+  }, [setSelectedNodeId, setUpdateMode]);
 
-  // Validate connections - check socket type compatibility
   const isValidConnection = useCallback(
     (connection: Connection | { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) => {
-      const sourceNode = nodes.find((n) => n.id === connection.source);
-      const targetNode = nodes.find((n) => n.id === connection.target);
-
-      if (!sourceNode || !targetNode) return false;
-
-      const sourceData = sourceNode.data as WorkflowNodeData;
-      const targetData = targetNode.data as WorkflowNodeData;
-
-      // Find the output socket on source node
-      const outputSocket = sourceData.definition.outputs.find(
-        (o) => o.id === connection.sourceHandle
-      );
-
-      // Find the input socket on target node
-      const inputSocket = targetData.definition.inputs.find(
-        (i) => i.id === connection.targetHandle
-      );
-
-      if (!outputSocket || !inputSocket) return false;
-
-      // "any" type connects to anything
-      if (outputSocket.type === "any" || inputSocket.type === "any") {
-        return true;
-      }
-
-      // Otherwise types must match (image->image, video->video)
-      return outputSocket.type === inputSocket.type;
+      return isConnectionTypeCompatible(nodes, connection);
     },
     [nodes]
   );
@@ -231,55 +473,25 @@ export function WorkflowCanvas() {
     [setEdges]
   );
 
-  // Handle double-click to open context menu
-  const onDoubleClick = useCallback(
-    (event: React.MouseEvent) => {
-      event.preventDefault();
-
-      if (!reactFlowInstance) return;
-
-      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!bounds) return;
-
-      // Get flow coordinates from screen position
-      const flowPosition = reactFlowInstance.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      setContextMenu({
-        show: true,
-        position: { x: event.clientX, y: event.clientY },
-        flowPosition,
-      });
-    },
-    [reactFlowInstance]
-  );
-
-  // Handle right-click context menu
-  const onContextMenu = useCallback(
-    (event: React.MouseEvent) => {
-      event.preventDefault();
-      onDoubleClick(event);
-    },
-    [onDoubleClick]
-  );
-
   // Handle pane click to deselect and close context menu
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null);
     setContextMenu((prev) => ({ ...prev, show: false }));
-  }, []);
+    if (showSettings) {
+      setShowSettings(false);
+    }
+  }, [setContextMenu, setSelectedNodeId, setShowSettings, showSettings]);
 
-  // Sanitize workflow name for use in step IDs (must be alphanumeric with _ or -)
-  const sanitizeForId = (name: string): string => {
-    return name
-      .replace(/[()]/g, '')      // Remove parentheses
-      .replace(/\s+/g, '_')       // Replace spaces with underscores
-      .replace(/[^a-zA-Z0-9_-]/g, '') // Remove any other invalid chars
-      .replace(/_+/g, '_')        // Collapse multiple underscores
-      .replace(/^_|_$/g, '');     // Trim leading/trailing underscores
-  };
+  const onRequestContextMenu = useCallback(
+    (position: { screen: { x: number; y: number }; flow: { x: number; y: number } }) => {
+      setContextMenu({
+        show: true,
+        position: position.screen,
+        flowPosition: position.flow,
+      });
+    },
+    [setContextMenu]
+  );
 
   // Add a node from context menu (nodeType is the workflow name)
   const addNode = useCallback(
@@ -295,8 +507,7 @@ export function WorkflowCanvas() {
         }
       }
 
-      // Sanitize workflow name for step ID (must be alphanumeric with _ or -)
-      const sanitizedName = sanitizeForId(workflow);
+      const sanitizedName = sanitizeWorkflowStepId(workflow);
 
       const newNode: WorkflowNodeType = {
         id: `${sanitizedName}_${Date.now()}`,
@@ -317,14 +528,14 @@ export function WorkflowCanvas() {
       // Select the new node
       setSelectedNodeId(newNode.id);
     },
-    [contextMenu.flowPosition, setNodes, getNodeDefinition]
+    [contextMenu.flowPosition, setNodes, getNodeDefinition, setContextMenu, setSelectedNodeId]
   );
 
   // Handle export button click
   const handleExport = useCallback(() => {
     const chain = toChainDefinition(nodes, edges, currentChainName);
     setExportOutput(JSON.stringify(chain, null, 2));
-  }, [nodes, edges, currentChainName]);
+  }, [nodes, edges, currentChainName, setExportOutput]);
 
   // Handle import from JSON
   const handleImport = useCallback((jsonString: string) => {
@@ -340,17 +551,19 @@ export function WorkflowCanvas() {
       setNodes(importedNodes);
       setEdges(importedEdges);
       setExportOutput("");
+      setDefinitionSignature(null);
     } catch (err) {
       console.error("Failed to import chain:", err);
       alert("Failed to import chain. Check the JSON format.");
     }
-  }, [nodeStore, setNodes, setEdges]);
+  }, [nodeStore, setNodes, setEdges, setExportOutput, setDefinitionSignature]);
 
   // Handle loading chain from sidebar
   const handleLoadChain = useCallback((
     chainId: string,
     definition: Record<string, unknown>,
-    artifacts: { status: string; steps: Array<{ step_id: string; status: string; error_message?: string | null; artifacts: Array<{ id: string; url: string }> }> }
+    artifacts: { status: string; steps: Array<{ step_id: string; status: string; error_message?: string | null; artifacts: Array<{ id: string; url: string }> }> },
+    loadedDefinitionHash?: string | null
   ) => {
     try {
       const chain = definition as unknown as ChainDefinition;
@@ -369,6 +582,7 @@ export function WorkflowCanvas() {
       setEdges(importedEdges);
       setExportOutput("");
       setSelectedNodeId(null);
+      setDefinitionSignature(loadedDefinitionHash ?? null);
 
       // Load artifacts into execution store to show on nodes
       const historicalSteps = artifacts.steps.map((step) => ({
@@ -376,7 +590,7 @@ export function WorkflowCanvas() {
         status: step.status,
         artifactUrl: step.artifacts[0]?.url,
         artifactId: step.artifacts[0]?.id,
-        error: step.error_message || undefined,
+        error: toErrorText(step.error_message),
       }));
 
       const loadFromHistory = useExecutionStore.getState().loadFromHistory;
@@ -389,37 +603,122 @@ export function WorkflowCanvas() {
       console.error("Failed to load chain:", err);
       alert("Failed to load chain definition.");
     }
-  }, [nodeStore, setNodes, setEdges, setCurrentChainName]);
+  }, [
+    nodeStore,
+    setNodes,
+    setEdges,
+    setCurrentChainName,
+    setExportOutput,
+    setSelectedNodeId,
+    setDefinitionSignature,
+  ]);
 
   // Handle execute button click
   const handleExecute = useCallback(async () => {
+    const invalidNodes = nodes.filter((n) => {
+      const data = n.data as { definition?: { category?: string } };
+      return data.definition?.category === "invalid";
+    });
+    if (invalidNodes.length > 0) {
+      alert(
+        `Cannot execute chain: ${invalidNodes.length} invalid template node(s) must be fixed and revalidated first.`
+      );
+      return;
+    }
+
     const chain = toChainDefinition(nodes, edges, currentChainName);
 
     try {
-      const requestBody: { chain: typeof chain; level_wait_seconds?: number } = { chain };
-      if (waitEnabled && waitSeconds > 0) {
-        requestBody.level_wait_seconds = waitSeconds;
-      }
-
-      const response = await fetch("http://localhost:8001/chains/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+      const levelWaitSeconds = waitEnabled && waitSeconds > 0 ? waitSeconds : 0;
+      const result = await executeWithCache(chain as unknown as Record<string, unknown>, {
+        signature: definitionSignature,
+        force: false,
+        levelWaitSeconds,
       });
-      const result = await response.json();
+      setDefinitionSignature(result.signature);
 
       // Get step IDs from the chain
       const stepIds = nodes.map((n) => n.id);
 
-      console.log("[Execute] Chain ID:", result.chain_id);
-      console.log("[Execute] Step IDs:", stepIds);
-      console.log("[Execute] Full response:", result);
+      const payload = result.result;
+      const resolvedChainId = String(payload.chain_id || "");
+      const resolvedJobId = String(payload.job_id || resolvedChainId);
+      if (!resolvedChainId) {
+        throw new Error("Execution response missing chain_id");
+      }
+
+      if (result.mode === "cached" || payload.cached) {
+        await selectVersion(resolvedChainId);
+        const historical = useChainStore.getState().chainArtifacts;
+        if (historical) {
+          const historicalSteps = historical.steps.map((step) => ({
+            stepId: step.step_id,
+            status: step.status,
+            artifactUrl: step.artifacts[0]?.url,
+            artifactId: step.artifacts[0]?.id,
+            error: toErrorText(step.error_message),
+          }));
+          const loadFromHistory = useExecutionStore.getState().loadFromHistory;
+          loadFromHistory(
+            resolvedChainId,
+            historical.status === "completed" ? "completed" : "failed",
+            historicalSteps
+          );
+        }
+        setChainId(null);
+        fetchChainNames();
+        return;
+      }
 
       // Start tracking execution
-      startExecution(result.chain_id, result.job_id || result.chain_id, stepIds);
+      startExecution(resolvedChainId, resolvedJobId, stepIds);
+
+      if (result.mode === "regenerate" && result.changedSteps.length > 0) {
+        const fromStepId = result.changedSteps[0].stepId;
+        const rerunStepIds = collectRerunStepIds(fromStepId, edges);
+        const cachedStepIds = stepIds.filter((stepId) => !rerunStepIds.has(stepId));
+
+        let cachedArtifactByStepId: Record<string, { artifactId?: string; artifactUrl?: string }> = {};
+        const sourceChainId = payload.cached_from_chain_id;
+        if (typeof sourceChainId === "string" && sourceChainId.trim().length > 0) {
+          try {
+            const response = await fetch(`${GATEWAY_URL}/chains/${encodeURIComponent(sourceChainId)}/artifacts`);
+            if (response.ok) {
+              const sourceArtifacts = await response.json();
+              const entries = Array.isArray(sourceArtifacts?.steps) ? sourceArtifacts.steps : [];
+              cachedArtifactByStepId = Object.fromEntries(
+                entries.map((step: { step_id?: unknown; artifacts?: Array<{ id?: unknown; url?: unknown }> }) => {
+                  const stepId = typeof step.step_id === "string" ? step.step_id : "";
+                  const artifact = Array.isArray(step.artifacts) ? step.artifacts[0] : undefined;
+                  const artifactId = typeof artifact?.id === "string" ? artifact.id : undefined;
+                  const artifactUrl = typeof artifact?.url === "string" ? artifact.url : undefined;
+                  return [stepId, { artifactId, artifactUrl }];
+                })
+              );
+            }
+          } catch (error) {
+            console.warn("Failed to load cached artifacts for regenerate:", error);
+          }
+        }
+
+        markStepsCached(
+          cachedStepIds.map((stepId) => {
+            const artifact = cachedArtifactByStepId[stepId] || {};
+            const artifactUrl =
+              artifact.artifactId && !artifact.artifactUrl
+                ? `${GATEWAY_URL}/artifact-service/artifacts/${artifact.artifactId}/download`
+                : artifact.artifactUrl;
+            return {
+              stepId,
+              artifactId: artifact.artifactId,
+              artifactUrl,
+            };
+          })
+        );
+      }
 
       // Subscribe to SSE events
-      setChainId(result.chain_id);
+      setChainId(resolvedChainId);
 
       // Refresh chain sidebar to show new execution
       fetchChainNames();
@@ -427,7 +726,21 @@ export function WorkflowCanvas() {
       console.error("Failed to execute:", err);
       alert("Failed to execute chain. Is the backend running?");
     }
-  }, [nodes, edges, currentChainName, startExecution, fetchChainNames, waitEnabled, waitSeconds]);
+  }, [
+    nodes,
+    edges,
+    currentChainName,
+    definitionSignature,
+    executeWithCache,
+    setDefinitionSignature,
+    startExecution,
+    markStepsCached,
+    selectVersion,
+    setChainId,
+    fetchChainNames,
+    waitEnabled,
+    waitSeconds,
+  ]);
 
   // Handle cancel execution (terminate the workflow)
   const handleCancelExecution = useCallback(async () => {
@@ -441,23 +754,43 @@ export function WorkflowCanvas() {
     disconnect();
     setChainId(null);
     clearExecution();
-  }, [execution, cancelChain, disconnect, clearExecution]);
+  }, [execution, cancelChain, disconnect, clearExecution, setChainId]);
+
+  const handleAbortAllExecution = useCallback(async () => {
+    try {
+      const result = await abortAllChains();
+      if (execution?.status === "running") {
+        disconnect();
+        setChainId(null);
+        clearExecution();
+      }
+      fetchChainNames();
+      alert(`Abort requested for ${result.requested_count} chains. Cancelled: ${result.cancelled_count}.`);
+    } catch (err) {
+      console.error("Failed to abort all chains:", err);
+      alert(`Failed to abort all chains: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }, [abortAllChains, execution, disconnect, setChainId, clearExecution, fetchChainNames]);
 
   // Handle clear execution (just clear the UI state)
   const handleClearExecution = useCallback(() => {
     disconnect();
     setChainId(null);
     clearExecution();
-  }, [disconnect, clearExecution]);
+  }, [disconnect, clearExecution, setChainId]);
 
   // Handle new chain creation - clear the canvas
   const handleNewChain = useCallback(() => {
     setNodes([]);
     setEdges([]);
-    setSelectedNodeId(null);
-    setExportOutput("");
+    resetForNewChain();
     handleClearExecution();
-  }, [setNodes, setEdges, handleClearExecution]);
+    try {
+      window.localStorage.removeItem(WORKFLOW_DRAFT_STORAGE_KEY);
+    } catch (error) {
+      console.error("Failed to clear workflow draft from localStorage:", error);
+    }
+  }, [setNodes, setEdges, resetForNewChain, handleClearExecution]);
 
   // Handle update parameters for a running chain step
   const handleUpdateParameters = useCallback(async (nodeId: string, parameters: Record<string, unknown>) => {
@@ -471,7 +804,28 @@ export function WorkflowCanvas() {
       console.error("Failed to update parameters:", err);
       alert(`Failed to update parameters: ${err instanceof Error ? err.message : "Unknown error"}`);
     }
-  }, [execution, updateStepParameters]);
+  }, [execution, updateStepParameters, setUpdateMode, setSelectedNodeId]);
+
+  const { openEditor: handleOpenNewWorkflowEditor, saveWorkflow: handleSaveNewWorkflow } =
+    useNewWorkflowBridge({
+      isOpen: isNewWorkflowEditorOpen,
+      origin: newWorkflowOrigin,
+      workflowName: newWorkflowName,
+      selectedServer: selectedNewWorkflowServer,
+      iframeRef: newWorkflowIframeRef,
+      pingTimerRef: newWorkflowPingTimerRef,
+      fetchServers,
+      fetchWorkflows,
+      getComfyServerUrl,
+      setServerName: setNewWorkflowServerName,
+      setBaseUrl: setNewWorkflowBaseUrl,
+      setOpening: setIsOpeningNewWorkflowEditor,
+      setSaving: setIsSavingNewWorkflow,
+      setError: setNewWorkflowError,
+      setStatus: setNewWorkflowBridgeStatus,
+      setOpen: setIsNewWorkflowEditorOpen,
+      setCurrentChainName,
+    });
 
   return (
     <div className="flex h-screen bg-[var(--bg)]">
@@ -483,134 +837,36 @@ export function WorkflowCanvas() {
       />
 
       {/* Main content area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="relative flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-4 py-2 bg-[var(--surface-1)] border-b border-[var(--border)]">
-        <div className="flex items-center gap-4">
-          <h1 className="text-base font-semibold text-[var(--text-primary)]">
-            Graviton
-          </h1>
-          <div className="h-4 w-px bg-[var(--border)]" />
-          <input
-            type="text"
-            value={currentChainName}
-            onChange={(e) => setCurrentChainName(e.target.value)}
-            className="px-2 py-1 bg-transparent border border-transparent hover:border-[var(--border)] focus:border-[var(--brand-primary)] rounded text-sm text-[var(--text-secondary)] focus:outline-none transition-colors"
-            placeholder="Chain name..."
-          />
-          <div className="flex items-center gap-2">
-            <input
-              type="file"
-              accept=".json"
-              className="hidden"
-              id="import-file"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = (event) => {
-                    handleImport(event.target?.result as string);
-                  };
-                  reader.readAsText(file);
-                  e.target.value = ""; // Reset for re-import
-                }
-              }}
-            />
-            <button
-              onClick={() => document.getElementById("import-file")?.click()}
-              className="px-3 py-1.5 text-sm bg-[var(--surface-4)] hover:bg-[var(--surface-5)] text-[var(--text-primary)] rounded-md transition-colors"
-            >
-              Import
-            </button>
-            <button
-              onClick={handleExport}
-              className="px-3 py-1.5 text-sm bg-[var(--surface-4)] hover:bg-[var(--surface-5)] text-[var(--text-primary)] rounded-md transition-colors"
-            >
-              Export
-            </button>
-            {/* Wait before execution */}
-            <div className="flex items-center gap-2 px-2 py-1 bg-[var(--surface-3)] rounded-md">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={waitEnabled}
-                  onChange={(e) => setWaitEnabled(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-[var(--border)] bg-[var(--surface-4)] text-[var(--brand-primary)] focus:ring-0 focus:ring-offset-0 cursor-pointer"
-                />
-                <span className="text-xs text-[var(--text-secondary)]">Wait</span>
-              </label>
-              {waitEnabled && (
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min={0}
-                    value={waitSeconds}
-                    onChange={(e) => setWaitSeconds(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-14 px-1.5 py-0.5 text-xs text-center bg-[var(--surface-4)] border border-[var(--border)] rounded text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand-secondary)]"
-                  />
-                  <span className="text-xs text-[var(--text-muted)]">sec</span>
-                </div>
-              )}
-            </div>
+        <WorkflowToolbar
+          currentChainName={currentChainName}
+          onChainNameChange={setCurrentChainName}
+          onImport={handleImport}
+          onExport={handleExport}
+          onOpenNewWorkflow={handleOpenNewWorkflowEditor}
+          isOpeningNewWorkflow={isOpeningNewWorkflowEditor}
+          waitEnabled={waitEnabled}
+          onWaitEnabledChange={setWaitEnabled}
+          waitSeconds={waitSeconds}
+          onWaitSecondsChange={setWaitSeconds}
+          execution={execution}
+          hasNodes={nodes.length > 0}
+          onExecute={handleExecute}
+          onCancelExecution={handleCancelExecution}
+          onAbortAllExecution={handleAbortAllExecution}
+          onClearExecution={handleClearExecution}
+          onToggleSettings={() => setShowSettings(!showSettings)}
+          isLoading={isLoading}
+          error={error}
+        />
 
-            {!execution ? (
-              <button
-                onClick={handleExecute}
-                disabled={nodes.length === 0}
-                className="px-3 py-1.5 text-sm bg-[var(--brand-success)] hover:opacity-90 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Execute
-              </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-1 rounded ${
-                  execution.status === "running" ? "bg-blue-500/20 text-blue-400" :
-                  execution.status === "completed" ? "bg-green-500/20 text-green-400" :
-                  "bg-red-500/20 text-red-400"
-                }`}>
-                  {execution.status === "running" ? "Running..." :
-                   execution.status === "completed" ? "Completed" : "Failed"}
-                </span>
-                {execution.status === "running" ? (
-                  <button
-                    onClick={handleCancelExecution}
-                    className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
-                  >
-                    Cancel
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleClearExecution}
-                    className="px-3 py-1.5 text-sm bg-[var(--surface-4)] hover:bg-[var(--surface-5)] text-[var(--text-primary)] rounded-md transition-colors"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          {isLoading && (
-            <span className="text-xs text-[var(--text-muted)]">Loading nodes...</span>
-          )}
-          {error && (
-            <span className="text-xs text-red-500">Error: {error}</span>
-          )}
-          <span className="text-xs text-[var(--text-muted)]">
-            Double-click to add nodes • Click node to edit
-          </span>
-        </div>
-      </div>
+        {/* Level wait progress bar */}
+        <LevelWaitBar />
 
-      {/* Level wait progress bar */}
-      <LevelWaitBar />
-
-      {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Canvas */}
-        <div ref={reactFlowWrapper} className="flex-1">
-          <ReactFlow
+        {/* Main content */}
+        <div className="flex-1 flex overflow-hidden">
+          <WorkflowGraph
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
@@ -619,91 +875,51 @@ export function WorkflowCanvas() {
             onSelectionChange={onSelectionChange}
             onPaneClick={onPaneClick}
             isValidConnection={isValidConnection}
-            onDoubleClick={onDoubleClick}
-            onContextMenu={onContextMenu}
-            onInit={setReactFlowInstance}
+            onRequestContextMenu={onRequestContextMenu}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            defaultEdgeOptions={{ type: "workflow" }}
-            fitView
-            snapToGrid
-            snapGrid={[16, 16]}
-            connectionLineStyle={{ stroke: "var(--brand-secondary)", strokeWidth: 2 }}
-          >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={16}
-              size={1}
-              color="var(--border)"
-            />
-            <Controls
-              className="!bg-[var(--surface-2)] !border-[var(--border-1)] !shadow-lg [&>button]:!bg-[var(--surface-3)] [&>button]:!border-[var(--border)] [&>button]:!text-[var(--text-primary)] [&>button:hover]:!bg-[var(--surface-4)]"
-            />
-            <MiniMap
-              className="!bg-[var(--surface-2)] !border-[var(--border-1)]"
-              nodeColor={(node) => (node.data as unknown as WorkflowNodeData)?.color || "#666"}
-              maskColor="rgba(0, 0, 0, 0.8)"
-            />
+          />
 
-            {/* Hint panel */}
-            <Panel position="bottom-center" className="!mb-4">
-              <div className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--border-1)] rounded-full text-xs text-[var(--text-muted)]">
-                Double-click to add nodes
-              </div>
-            </Panel>
-          </ReactFlow>
-        </div>
-
-        {/* Properties panel (right side) */}
-        {selectedNode && (
-          <NodePropertiesPanel
-            nodeId={selectedNode.id}
-            data={selectedNode.data as WorkflowNodeData}
-            onClose={() => {
+          <WorkflowSidePanels
+            selectedNode={selectedNode}
+            updateMode={updateMode}
+            setNodes={setNodes}
+            onCloseNodePanel={() => {
               setSelectedNodeId(null);
               setUpdateMode(false);
             }}
-            setNodes={setNodes}
-            updateMode={updateMode}
             onUpdateParameters={handleUpdateParameters}
+            exportOutput={exportOutput}
+            onCloseExport={() => setExportOutput("")}
           />
-        )}
+        </div>
 
-        {/* Export output panel (right side) */}
-        {exportOutput && !selectedNode && (
-          <div className="w-96 bg-[var(--surface-1)] border-l border-[var(--border)] overflow-auto">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-medium text-[var(--text-primary)]">Chain Output</h2>
-                <button
-                  onClick={() => setExportOutput("")}
-                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                >
-                  Close
-                </button>
-              </div>
-              <pre className="text-xs text-[var(--text-secondary)] bg-[var(--surface-3)] p-4 rounded-md overflow-auto">
-                {exportOutput}
-              </pre>
-            </div>
-          </div>
-        )}
+        <WorkflowOverlays
+          showSettings={showSettings}
+          onCloseSettings={() => setShowSettings(false)}
+          contextMenu={{ show: contextMenu.show, position: contextMenu.position }}
+          onContextSelect={addNode}
+          onContextClose={() => setContextMenu((prev) => ({ ...prev, show: false }))}
+          showDashboard={showDashboard}
+          onCloseDashboard={() => setShowDashboard(false)}
+          isNewWorkflowEditorOpen={isNewWorkflowEditorOpen}
+          newWorkflowBaseUrl={newWorkflowBaseUrl}
+          selectedNewWorkflowServerName={selectedNewWorkflowServer?.name || null}
+          newWorkflowBridgeStatus={newWorkflowBridgeStatus}
+          newWorkflowName={newWorkflowName}
+          onChangeNewWorkflowName={setNewWorkflowName}
+          newWorkflowServerName={newWorkflowServerName}
+          onChangeNewWorkflowServerName={setNewWorkflowServerName}
+          servers={servers}
+          isSavingNewWorkflow={isSavingNewWorkflow}
+          onSaveNewWorkflow={handleSaveNewWorkflow}
+          onCloseNewWorkflow={resetNewWorkflowEditor}
+          newWorkflowError={newWorkflowError}
+          newWorkflowIframeRef={newWorkflowIframeRef}
+          fatalExecutionError={fatalExecutionError}
+          onCloseFatalExecutionError={closeFatalExecutionError}
+        />
       </div>
-
-        {/* Context menu */}
-        {contextMenu.show && (
-          <ContextMenu
-            position={contextMenu.position}
-            onSelect={addNode}
-            onClose={() => setContextMenu((prev) => ({ ...prev, show: false }))}
-          />
-        )}
-      </div>
-
-      {/* Chain dashboard modal */}
-      {showDashboard && (
-        <ChainDashboard onClose={() => setShowDashboard(false)} />
-      )}
     </div>
   );
 }

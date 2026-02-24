@@ -215,6 +215,93 @@ class ComfyHTTPClient:
 
         return response.json()
 
+    async def list_bridge_templates(self) -> Dict[str, Any]:
+        """
+        List template files exposed by graviton_bridge.
+
+        Returns:
+            JSON payload from /graviton-bridge/templates
+        """
+        url = f"{self.server_address}/graviton-bridge/templates"
+
+        self._log(f"GET {url}")
+        response = await self.client.get(url)
+        response.raise_for_status()
+
+        return response.json()
+
+    async def download_bridge_template(self, filename: str) -> bytes:
+        """
+        Download a template file via graviton_bridge.
+
+        Args:
+            filename: Template filename (e.g., "fluxdev.json")
+
+        Returns:
+            File content as bytes
+        """
+        url = f"{self.server_address}/graviton-bridge/templates/download/{filename}"
+
+        self._log(f"GET {url}")
+        response = await self.client.get(url)
+        response.raise_for_status()
+
+        self._log(f"GET {url} -> {len(response.content)} bytes")
+        return response.content
+
+    async def set_bridge_mode(self, mode: str) -> Dict[str, Any]:
+        """
+        Configure graviton_bridge mode on the target Comfy server.
+
+        Args:
+            mode: One of local|orchestrator|s3|cloudinary
+
+        Returns:
+            JSON response from /graviton-bridge/config
+        """
+        url = f"{self.server_address}/graviton-bridge/config"
+        payload = {"mode": mode}
+        self._log(f"POST {url} mode={mode}")
+        response = await self.client.post(url, json=payload)
+        response.raise_for_status()
+        result = response.json()
+        return result if isinstance(result, dict) else {"ok": True}
+
+    async def get_bridge_control_status(self) -> Dict[str, Any]:
+        """Get bridge control status (worker identity + auth capability)."""
+        url = f"{self.server_address}/graviton-bridge/control/status"
+        self._log(f"GET {url}")
+        response = await self.client.get(url)
+        response.raise_for_status()
+        result = response.json()
+        return result if isinstance(result, dict) else {}
+
+    async def get_bridge_config(self) -> Dict[str, Any]:
+        """Get current graviton_bridge effective config (redacted on worker side)."""
+        url = f"{self.server_address}/graviton-bridge/config"
+        self._log(f"GET {url}")
+        response = await self.client.get(url)
+        response.raise_for_status()
+        result = response.json()
+        return result if isinstance(result, dict) else {}
+
+    async def set_bridge_config(
+        self,
+        config: Dict[str, Any],
+        headers: Optional[Dict[str, str]] = None,
+        raw_body: Optional[bytes] = None,
+    ) -> Dict[str, Any]:
+        """Configure full graviton_bridge dataplane config with optional control auth headers."""
+        url = f"{self.server_address}/graviton-bridge/config"
+        self._log(f"POST {url} keys={list(config.keys())}")
+        if raw_body is not None:
+            response = await self.client.post(url, content=raw_body, headers=headers or {})
+        else:
+            response = await self.client.post(url, json=config, headers=headers or {})
+        response.raise_for_status()
+        result = response.json()
+        return result if isinstance(result, dict) else {"ok": True}
+
     async def get_embeddings(self) -> list[str]:
         """
         Get list of available embeddings

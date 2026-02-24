@@ -1,0 +1,76 @@
+{
+  "46": {
+    "inputs": {
+      "language": "English",
+      "device": "auto",
+      "exaggeration": 0.5,
+      "temperature": 0.8,
+      "cfg_weight": 0.5,
+      "crash_protection_template": "hmm ,, {seg} hmm ,,"
+    },
+    "class_type": "ChatterBoxEngineNode",
+    "_meta": {
+      "title": "⚙️ ChatterBox TTS Engine"
+    }
+  },
+  "47": {
+    "inputs": {
+      "text": [
+        "65",
+        0
+      ],
+      "narrator_voice": "none",
+      "seed": 1552347952,
+      "enable_chunking": true,
+      "max_chars_per_chunk": 400,
+      "chunk_combination_method": "auto",
+      "silence_between_chunks_ms": 100,
+      "enable_audio_cache": true,
+      "batch_size": 0,
+      "TTS_engine": [
+        "46",
+        0
+      ],
+      "opt_narrator": [
+        "51",
+        0
+      ]
+    },
+    "class_type": "UnifiedTTSTextNode",
+    "_meta": {
+      "title": "🎤 TTS Text"
+    }
+  },
+  "51": {
+    "inputs": {
+      "voice_name": "voices_examples/David_Attenborough CC3.wav",
+      "reference_text": ""
+    },
+    "class_type": "CharacterVoicesNode",
+    "_meta": {
+      "title": "🎭 Character Voices"
+    }
+  },
+  "65": {
+    "inputs": {
+      "value": "On Tuesdays, the pigeons held parliament. They debated the ethics of breadcrumbs and the metaphysics of flight. One particularly philosophical pigeon named Thistle believed gravity was just a suggestion. He once floated for three minutes straight, fueled by sheer conviction and a gust of rebellious wind."
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "Speech"
+    }
+  },
+  "74": {
+    "inputs": {
+      "filename": "graviton_audio.wav",
+      "audio": [
+        "47",
+        0
+      ]
+    },
+    "class_type": "GravitonSaveAudio",
+    "_meta": {
+      "title": "Graviton Save Audio"
+    }
+  }
+}

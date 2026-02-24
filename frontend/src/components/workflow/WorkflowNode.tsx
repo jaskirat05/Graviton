@@ -5,13 +5,14 @@
  * Shows execution status, progress, output preview, approval UI, and server selection
  */
 
-import { memo, useState, useEffect } from "react";
-import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import { memo, useState, useEffect, useMemo } from "react";
+import { Handle, Position, useStore, type Edge, type NodeProps, type Node } from "@xyflow/react";
 import { useExecutionStore, type StepStatus } from "@/stores/executionStore";
 import { useServerStore } from "@/stores/serverStore";
 import { approveStep, rejectStep } from "@/hooks/useChainEvents";
 import { VideoPlayer } from "@/components/ui/VideoPlayer";
 import type { WorkflowNodeData, InputSocketDefinition, OutputSocketDefinition, InputParameterDefinition } from "./types";
+import { getEdgeColor } from "./edgeColors";
 
 type WorkflowNodeType = Node<WorkflowNodeData & Record<string, unknown>>;
 
@@ -29,6 +30,28 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
   const servers = useServerStore((state) => state.servers);
   const fetchServers = useServerStore((state) => state.fetchServers);
   const validateWorkflowServer = useServerStore((state) => state.validateWorkflowServer);
+  const incomingEdges = useStore((state) =>
+    state.edges.filter((edge) => edge.target === id)
+  ) as Edge[];
+
+  const inputDotColors = useMemo(() => {
+    const byHandle = new Map<string, string>();
+    for (const edge of incomingEdges) {
+      const handleId = edge.targetHandle || "";
+      if (!handleId || byHandle.has(handleId)) continue;
+      byHandle.set(
+        handleId,
+        getEdgeColor({
+          id: edge.id,
+          source: edge.source,
+          sourceHandle: edge.sourceHandle,
+          target: edge.target,
+          targetHandle: edge.targetHandle,
+        })
+      );
+    }
+    return byHandle;
+  }, [incomingEdges]);
 
   // Fetch servers on mount
   useEffect(() => {
@@ -72,6 +95,8 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
         return { border: "border-yellow-500", bg: "bg-yellow-500/10", icon: "⏳" };
       case "completed":
         return { border: "border-green-500", bg: "bg-green-500/10", icon: "✓" };
+      case "cached":
+        return { border: "border-purple-500", bg: "bg-purple-500/10", icon: "C" };
       case "failed":
         return { border: "border-red-500", bg: "bg-red-500/10", icon: "✗" };
       default:
@@ -80,6 +105,8 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
   };
 
   const statusStyles = getStatusStyles(stepExecution?.status);
+  const hasFailure = stepExecution?.status === "failed";
+  const isCached = stepExecution?.status === "cached";
 
   // Handle approve
   const handleApprove = async () => {
@@ -118,6 +145,8 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
         transition-all duration-150 cursor-pointer
         ${selected ? "border-[var(--brand-secondary)] shadow-lg ring-2 ring-[var(--brand-secondary)]/30" : "border-[var(--border-1)] hover:border-[var(--border-2)]"}
         ${stepExecution?.status ? statusStyles.border : ""}
+        ${isCached ? "border-2 border-purple-500 ring-2 ring-purple-500/60 shadow-lg shadow-purple-500/20" : ""}
+        ${hasFailure ? "border-2 border-red-500 ring-2 ring-red-500/60 shadow-lg shadow-red-500/20" : ""}
       `}
     >
       {/* Status indicator */}
@@ -135,6 +164,11 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
         <div className="text-sm font-medium text-[var(--text-primary)] truncate">
           {label}
         </div>
+        {isCached && (
+          <div className="mt-1 inline-flex items-center rounded-full border border-purple-500/60 bg-purple-500/10 px-2 py-0.5 text-[10px] font-semibold text-purple-300">
+            Cached
+          </div>
+        )}
       </div>
 
       {/* Progress bar during execution */}
@@ -164,13 +198,25 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
           <div className="text-[10px] text-red-400 truncate" title={stepExecution.error}>
             {stepExecution.error}
           </div>
+          {(stepExecution.failedNodeId || stepExecution.currentNode) && (
+            <div
+              className="mt-1 text-[10px] text-red-300 truncate"
+              title={stepExecution.failedNodeName || stepExecution.currentNodeName || stepExecution.failedNodeId || stepExecution.currentNode}
+            >
+              Node: {stepExecution.failedNodeId || stepExecution.currentNode}
+              {(stepExecution.failedNodeName || stepExecution.currentNodeName) &&
+                ` (${stepExecution.failedNodeName || stepExecution.currentNodeName})`}
+            </div>
+          )}
         </div>
       )}
 
       {/* Output preview */}
-      {stepExecution?.artifactUrl && (stepExecution.status === "completed" || stepExecution.status === "waiting_approval") && (
+      {stepExecution?.artifactUrl && (stepExecution.status === "completed" || stepExecution.status === "waiting_approval" || stepExecution.status === "cached") && (
         <div className="px-3 py-2 border-b border-[var(--border)]">
-          <div className="text-[10px] text-[var(--text-muted)] mb-1">Output</div>
+          <div className="text-[10px] text-[var(--text-muted)] mb-1">
+            {stepExecution.status === "cached" ? "Cached Output" : "Output"}
+          </div>
           <div className="relative w-full h-24 bg-[var(--surface-3)] rounded overflow-hidden">
             {definition.outputs[0]?.type === "video" ? (
               <VideoPlayer
@@ -233,14 +279,14 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
                     transform: "translateY(-50%)",
                     width: 12,
                     height: 12,
-                    background: getSocketColor(input.type),
+                    background: inputDotColors.get(input.id) || getSocketColor(input.type),
                     border: "2px solid var(--surface-2)",
                     cursor: "crosshair",
                   }}
                 />
                 <div
                   className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: getSocketColor(input.type) }}
+                  style={{ backgroundColor: inputDotColors.get(input.id) || getSocketColor(input.type) }}
                 />
                 <span>{input.label}</span>
               </div>
@@ -350,7 +396,7 @@ function WorkflowNodeComponent({ id, data, selected }: NodeProps<WorkflowNodeTyp
           <option value="">Auto (Load Balanced)</option>
           {servers.map((s) => (
             <option key={s.name} value={s.name}>
-              {s.name} ({s.node_count} nodes)
+              {s.name} ({s.address}{s.port ? `:${s.port}` : ""})
             </option>
           ))}
         </select>
@@ -391,6 +437,14 @@ function getSocketColor(type: string): string {
       return "#22c55e"; // green
     case "video":
       return "#3b82f6"; // blue
+    case "text":
+      return "#f59e0b"; // amber
+    case "audio":
+      return "#ec4899"; // pink
+    case "3d":
+      return "#8b5cf6"; // violet
+    case "file":
+      return "#14b8a6"; // teal
     default:
       return "#6b7280"; // gray
   }

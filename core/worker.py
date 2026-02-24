@@ -38,7 +38,11 @@ def setup_worker_logging(log_dir: Path = None, log_level: str = "INFO"):
 
     return logging.getLogger("worker"), log_file
 
-from core.executors import ComfyUIWorkflow, ChainExecutorWorkflow
+from core.executors import (
+    ComfyUIWorkflow,
+    ChainExecutorWorkflow,
+    ControlPlaneFanoutWorkflow,
+)
 from core.activities import (
     select_best_server,
     execute_and_track_workflow,
@@ -49,11 +53,16 @@ from core.activities import (
     apply_workflow_parameters,
     transfer_artifacts_from_storage,
     create_workflow_record,
+    create_cached_workflow_record_activity,
+    persist_step_output_artifact_activity,
     update_chain_status_activity,
     update_workflow_status_activity,
     get_workflow_artifacts,
     publish_step_completed_activity,
+    publish_step_cached_activity,
     publish_level_wait_event,
+    get_step_cache_activity,
+    upsert_step_cache_activity,
     create_approval_request_activity,
     upload_local_inputs,
     save_executed_definition_activity,
@@ -98,7 +107,11 @@ async def main():
     worker = Worker(
         client,
         task_queue="comfyui-gpu-farm",  # Name of our task queue
-        workflows=[ComfyUIWorkflow, ChainExecutorWorkflow],  # Register workflow classes
+        workflows=[
+            ComfyUIWorkflow,
+            ChainExecutorWorkflow,
+            ControlPlaneFanoutWorkflow,
+        ],  # Register workflow classes
         activities=[                     # Register activity functions
             select_best_server,
             execute_and_track_workflow,
@@ -109,11 +122,16 @@ async def main():
             apply_workflow_parameters,
             transfer_artifacts_from_storage,
             create_workflow_record,
+            create_cached_workflow_record_activity,
+            persist_step_output_artifact_activity,
             update_chain_status_activity,
             update_workflow_status_activity,
             get_workflow_artifacts,
             publish_step_completed_activity,
+            publish_step_cached_activity,
             publish_level_wait_event,
+            get_step_cache_activity,
+            upsert_step_cache_activity,
             create_approval_request_activity,
             upload_local_inputs,
             save_executed_definition_activity,
@@ -125,7 +143,14 @@ async def main():
     logger.info("=" * 60)
     logger.info("Connected to Temporal: localhost:7233")
     logger.info("Task Queue: comfyui-gpu-farm")
-    logger.info(f"Workflows: {[ComfyUIWorkflow.__name__, ChainExecutorWorkflow.__name__]}")
+    logger.info(
+        "Workflows: %s",
+        [
+            ComfyUIWorkflow.__name__,
+            ChainExecutorWorkflow.__name__,
+            ControlPlaneFanoutWorkflow.__name__,
+        ],
+    )
     if log_file:
         logger.info(f"Log file: {log_file}")
     logger.info("=" * 60)

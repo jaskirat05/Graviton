@@ -1,0 +1,8 @@
+{
+  "template_name": "LTX-2_I2V_Distilled_wLora",
+  "status": "invalid_policy",
+  "policy_errors": [
+    "POLICY_NO_OUTPUT_NODE"
+  ],
+  "updated_at": "2026-02-20T06:36:44.640268+00:00"
+}

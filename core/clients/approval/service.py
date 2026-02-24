@@ -7,7 +7,8 @@ Handles approval operations including parameter validation and Temporal signalin
 from typing import Dict, Any, List, Optional, Tuple
 from temporalio.client import Client
 
-from core.workflow_registry import get_registry
+from core.registry_service.template_manager import TemplateManager
+from core.registry_service.template_store import TemplateStore
 from core.database.crud.approval import (
     get_approval_request_by_token,
     approve_approval_request,
@@ -21,8 +22,8 @@ from core.observability.chain_logger import ChainLogger
 class ApprovalParameterValidator:
     """Validates parameters against workflow registry schema"""
 
-    def __init__(self, workflow_registry=None):
-        self.registry = workflow_registry or get_registry()
+    def __init__(self, template_manager: Optional[TemplateManager] = None):
+        self.template_manager = template_manager or TemplateManager(TemplateStore())
 
     def validate_parameters(
         self,
@@ -46,7 +47,7 @@ class ApprovalParameterValidator:
         errors = []
 
         # Get workflow info from registry
-        workflow_info = self.registry.get_workflow_info(workflow_name)
+        workflow_info = self.template_manager.get_workflow_info(workflow_name)
         if not workflow_info:
             errors.append(f"Workflow '{workflow_name}' not found in registry")
             return False, errors
@@ -125,7 +126,7 @@ class ApprovalParameterValidator:
         Returns:
             List of parameter definitions, or None if workflow not found
         """
-        workflow_info = self.registry.get_workflow_info(workflow_name)
+        workflow_info = self.template_manager.get_workflow_info(workflow_name)
         if not workflow_info:
             return None
 

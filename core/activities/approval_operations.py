@@ -99,7 +99,7 @@ async def create_approval_request_activity(
                         "artifact_id": artifact_id,
                         "workflow": workflow_name,
                         "approval_url": f"{gateway_url}/approval/{approval_request.approval_link_token}",
-                        "artifact_url": f"{gateway_url}/artifacts/{artifact_id}",
+                        "artifact_url": f"{gateway_url}/artifact-service/artifacts/{artifact_id}/download",
                     }
                 )
                 log(f"Published approval_requested event for chain {chain_id}")

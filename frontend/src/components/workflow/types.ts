@@ -8,11 +8,11 @@ import type { Node, Edge } from "@xyflow/react";
 // Base Types
 // =============================================================================
 
-export type NodeCategory = "image" | "video" | "utility";
+export type NodeCategory = "image" | "video" | "utility" | "invalid";
 
 // Explicit socket types
-export type InputSocketType = "image" | "video" | "any";
-export type OutputSocketType = "image" | "video" | "any";
+export type InputSocketType = "image" | "video" | "text" | "audio" | "3d" | "file" | "any";
+export type OutputSocketType = "image" | "video" | "text" | "audio" | "3d" | "file" | "any";
 
 // Input parameter types (form controls)
 export type InputParameterType = "text" | "number" | "select" | "textarea";
@@ -55,6 +55,18 @@ export interface InputParameterDefinition {
   placeholder?: string;
 }
 
+export interface SubgraphPairGroup {
+  key: string;
+  instances: string[];
+}
+
+export interface WorkflowStructureMetadata {
+  structureHash: string;
+  subgraphInstances: string[];
+  subgraphPairs: SubgraphPairGroup[];
+  promptParameterIds: string[];
+}
+
 // =============================================================================
 // Base Node Definition - One per workflow
 // =============================================================================
@@ -81,6 +93,10 @@ export interface BaseNodeDefinition {
 
   // Input parameters (form controls on the node) - fixed per workflow
   readonly inputParameters: InputParameterDefinition[];
+
+  // Hashes and derived metadata for frontend cache invalidation/rendering
+  readonly workflowHash?: string;
+  readonly structureMetadata?: WorkflowStructureMetadata;
 }
 
 // =============================================================================

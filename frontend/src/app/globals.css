@@ -120,26 +120,26 @@ body {
 }
 
 .react-flow__handle {
-  width: 14px !important;
-  height: 14px !important;
-  border-radius: 50% !important;
-  background: var(--workflow-edge) !important;
-  border: 3px solid var(--surface-2) !important;
-  cursor: crosshair !important;
-  z-index: 10 !important;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--workflow-edge);
+  border: 3px solid var(--surface-2);
+  cursor: crosshair;
+  z-index: 10;
 }
 
 .react-flow__handle:hover {
-  background: var(--brand-secondary) !important;
+  background: var(--brand-secondary);
   transform: scale(1.2);
 }
 
 .react-flow__handle-left {
-  left: -7px !important;
+  left: -7px;
 }
 
 .react-flow__handle-right {
-  right: -7px !important;
+  right: -7px;
 }
 
 /* Connection line while dragging */
@@ -155,11 +155,11 @@ body {
 
 /* Edge styling */
 .react-flow__edge-path {
-  stroke: var(--workflow-edge) !important;
-  stroke-width: 2 !important;
+  stroke: var(--workflow-edge);
+  stroke-width: 2;
 }
 
 .react-flow__edge.selected .react-flow__edge-path,
 .react-flow__edge:hover .react-flow__edge-path {
-  stroke: var(--brand-secondary) !important;
+  stroke: var(--brand-secondary);
 }

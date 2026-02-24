@@ -5,7 +5,6 @@ Centralized cache management for chain execution.
 Builds cache from database for regeneration/retry scenarios.
 """
 
-import os
 from typing import Dict, Set, Optional, Any
 from sqlalchemy import select, and_
 
@@ -52,14 +51,14 @@ def build_cache_from_database(
         seen_steps = set()
         for wf in workflows:
             if wf.step_id and wf.step_id not in seen_steps and wf.step_id not in exclude_step_ids:
-                # Validate artifact exists
+                # Resolve artifact metadata if present.
                 artifact = None
                 if wf.latest_artifact_id:
                     artifact = db.get(Artifact, wf.latest_artifact_id)
-                    if not artifact or not os.path.exists(artifact.local_path):
-                        continue  # Skip if artifact missing
+                    if not artifact:
+                        continue  # Skip if artifact row is missing
 
-                # Build output dict for template resolution
+                # Build output dict for template resolution and downstream references.
                 output = _build_output_from_artifact(artifact)
 
                 cache[wf.step_id] = {
@@ -85,6 +84,34 @@ def _build_output_from_artifact(artifact: Optional[Artifact]) -> Optional[Dict[s
     """
     if not artifact:
         return None
+
+    asset_ref = None
+    asset_id = None
+    if isinstance(artifact.extra_metadata, dict):
+        candidate = artifact.extra_metadata.get("asset_ref")
+        if isinstance(candidate, dict):
+            asset_ref = candidate
+        candidate_asset_id = artifact.extra_metadata.get("asset_id")
+        if isinstance(candidate_asset_id, str) and candidate_asset_id.strip():
+            asset_id = candidate_asset_id.strip()
+    if isinstance(asset_ref, dict):
+        ref_asset_id = asset_ref.get("asset_id")
+        if isinstance(ref_asset_id, str) and ref_asset_id.strip():
+            asset_id = ref_asset_id.strip()
+
+    # Asset-first output shape (matches comfy executor output contract).
+    if not asset_ref and asset_id:
+        asset_ref = {"asset_id": asset_id}
+
+    if asset_ref and asset_id:
+        return {
+            "type": "asset",
+            "output": asset_id,
+            "asset_id": asset_id,
+            "asset_ref": asset_ref,
+            "assets": [{"asset_id": asset_id, "asset_ref": asset_ref}],
+            "count": 1,
+        }
 
     filename = artifact.filename
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""

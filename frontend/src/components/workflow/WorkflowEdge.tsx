@@ -7,9 +7,14 @@
 
 import { memo } from "react";
 import { BaseEdge, getSmoothStepPath, type EdgeProps } from "@xyflow/react";
+import { getEdgeColor } from "./edgeColors";
 
 function WorkflowEdgeComponent({
   id,
+  source,
+  target,
+  sourceHandle,
+  targetHandle,
   sourceX,
   sourceY,
   targetX,
@@ -18,6 +23,7 @@ function WorkflowEdgeComponent({
   targetPosition,
   selected,
 }: EdgeProps) {
+  const color = getEdgeColor({ id, source, sourceHandle, target, targetHandle });
   const [edgePath] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -34,8 +40,9 @@ function WorkflowEdgeComponent({
       id={id}
       path={edgePath}
       style={{
-        strokeWidth: selected ? 2.5 : 2,
-        stroke: selected ? "var(--brand-secondary)" : "var(--workflow-edge)",
+        strokeWidth: selected ? 3 : 2.2,
+        stroke: color,
+        opacity: selected ? 1 : 0.9,
       }}
     />
   );

@@ -87,77 +87,15 @@ services:
     volumes:
       - /var/lib/redis/data
 
-  # ComfyAutomate Services
-  comfy-worker:
-    container_name: comfy-worker
-    image: jaski055/graviton-backend:latest
-    command: python core/worker.py
-    depends_on:
-      - temporal
-      - redis
-      - postgresql
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - REDIS_URL=redis://redis:6379
-      - TEMPLATES_DIR=/app/templates
-      - CONFIG_PATH=/app/config.yaml
-      - DATABASE_URL=postgresql://temporal:temporal@postgresql:5432/temporal
-      - HOST_UID=${HOST_UID:-}
-      - HOST_GID=${HOST_GID:-}
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./templates:/app/templates
-      - ./chains:/app/chains:ro
-      - ./artifacts:/app/artifacts
+  nats:
+    container_name: temporal-nats
+    image: nats:2-alpine
+    command: ["-js"]
     networks:
       - temporal-network
-    restart: unless-stopped
-
-  comfy-gateway:
-    container_name: comfy-gateway
-    image: jaski055/graviton-backend:latest
-    command: python core/main.py
-    depends_on:
-      - temporal
-      - redis
-      - comfy-worker
-      - postgresql
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - REDIS_URL=redis://redis:6379
-      - TEMPLATES_DIR=/app/templates
-      - CONFIG_PATH=/app/config.yaml
-      - DATABASE_URL=postgresql://temporal:temporal@postgresql:5432/temporal
-      - HOST_UID=${HOST_UID:-}
-      - HOST_GID=${HOST_GID:-}
     ports:
-      - 8001:8001
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./templates:/app/templates
-      - ./chains:/app/chains:ro
-      - ./artifacts:/app/artifacts
-    networks:
-      - temporal-network
-    restart: unless-stopped
-
-  comfy-frontend:
-    container_name: comfy-frontend
-    image: jaski055/graviton-frontend:latest
-    depends_on:
-      - comfy-gateway
-    environment:
-      - HOSTNAME=0.0.0.0
-      - NEXT_PUBLIC_API_URL=http://localhost:8001
-    ports:
-      - 3000:3000
-    networks:
-      - temporal-network
-    restart: unless-stopped
+      - 4222:4222
+      - 8222:8222
 
 networks:
   temporal-network:

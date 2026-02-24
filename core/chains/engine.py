@@ -4,6 +4,7 @@ Chain Engine
 Service layer for executing workflow chains using Temporal.
 """
 
+import asyncio
 import uuid
 from typing import Dict, Any, Optional
 from sqlalchemy import select
@@ -288,3 +289,32 @@ class ChainEngine:
         """
         handle = self.client.get_workflow_handle(job_id)
         await handle.cancel()
+
+    async def abort_chain(self, job_id: str, grace_seconds: float = 5.0) -> str:
+        """
+        Abort a running chain with escalation.
+
+        First requests cooperative cancellation. If the workflow does not stop
+        within grace_seconds, force-terminate it.
+
+        Args:
+            job_id: Job ID (Temporal workflow ID)
+            grace_seconds: Seconds to wait before force termination
+
+        Returns:
+            "cancelled" if cooperative cancel completed, "terminated" if force-killed
+        """
+        handle = self.client.get_workflow_handle(job_id)
+        await handle.cancel()
+
+        try:
+            await asyncio.wait_for(handle.result(), timeout=grace_seconds)
+            return "cancelled"
+        except asyncio.TimeoutError:
+            await handle.terminate(
+                reason=f"Abort-all escalation after {grace_seconds:.1f}s cancel grace period"
+            )
+            return "terminated"
+        except Exception:
+            # Workflow finished (including cancellation/failure) while waiting.
+            return "cancelled"

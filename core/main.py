@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 import json
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -24,8 +24,10 @@ from temporalio.client import Client
 sys.path.append(str(Path(__file__).parent.parent))
 
 from core.executors import ComfyUIWorkflow, WorkflowExecutionRequest, ChainExecutorWorkflow
-from core.workflow_registry import get_registry
-from core.registry import ComfyServerRegistry
+from core.registry_service.main import app as registry_service_app
+from core.registry_service.main import startup as registry_startup
+from core.registry_service.main import shutdown as registry_shutdown
+from core.registry_service.env import load_root_env
 from core.logging_config import setup_logging, get_logger
 from core.chains import (
     load_chain_from_dict,
@@ -34,17 +36,30 @@ from core.chains import (
 )
 from core.chains.hashing import calculate_definition_hash
 from core.database.session import get_session
+from core.database import init_db
 from core.database.crud.chain import get_chain_by_hash, get_chains_by_hash, get_chain, list_chains, delete_chain
 from core.clients.approval import router as approval_router, initialize_approval_service
 from core.services.broadcast import get_broadcast, connect_broadcast, disconnect_broadcast
 from core.observability.chain_logger import ChainLogger
+from core.artifact_service import ArtifactService
+
+
+def _get_allowed_cors_origins() -> list[str]:
+    """Return allowed CORS origins from env, with safe local dev defaults."""
+    raw = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://0.0.0.0:3000",
+    )
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return origins or ["http://localhost:3000"]
+
 
 app = FastAPI(title="ComfyAutomate Temporal Gateway", version="2.0.0")
 
 # CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_get_allowed_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,24 +67,26 @@ app.add_middleware(
 
 # Include routers
 app.include_router(approval_router)
+app.mount("/api/registry", registry_service_app)
 
 # Temporal client (will be initialized on startup)
 temporal_client: Client = None
 
-# ComfyUI server registry (will be initialized on startup)
-comfy_server_registry: ComfyServerRegistry = None
-
-# Workflow registry (will be initialized on startup)
-workflow_registry = None
-
 # Chain engine (will be initialized on startup)
 chain_engine: ChainEngine = None
+
+# Registry sub-app startup guard
+registry_initialized: bool = False
+
+# Load root .env without overriding already-set process env vars.
+load_root_env()
+artifact_service = ArtifactService()
 
 
 @app.on_event("startup")
 async def startup():
     """Connect to Temporal Server and initialize workflow registry on startup"""
-    global temporal_client, comfy_server_registry, workflow_registry, chain_engine
+    global temporal_client, chain_engine, registry_initialized
 
     # Setup colored logging with file output
     log_dir = Path(__file__).parent / "logs"
@@ -81,17 +98,8 @@ async def startup():
     logger.info("Connecting to Temporal", address=temporal_address)
     temporal_client = await Client.connect(temporal_address)
 
-    # Step 1: Sync templates from ComfyUI servers (downloads new templates with UI metadata)
-    comfy_server_registry = ComfyServerRegistry.get_instance()
-    try:
-        await comfy_server_registry.sync_all_servers()
-        logger.info("ComfyUI servers synced", servers=len(comfy_server_registry.servers))
-    except Exception as e:
-        logger.warning("ComfyUI server sync failed", error=str(e))
-
-    # Step 2: Discover workflows (creates override files with parameters from synced templates)
-    workflow_registry = get_registry()
-    summary = workflow_registry.discover_workflows()
+    # Ensure DB tables exist.
+    init_db()
 
     # Initialize chain engine
     chain_engine = ChainEngine(temporal_client)
@@ -102,13 +110,19 @@ async def startup():
     # Connect to Redis for pub/sub
     await connect_broadcast()
 
+    # Explicitly initialize mounted registry sub-app resources.
+    # Mounted app startup events are not guaranteed in all run modes.
+    if not registry_initialized:
+        await registry_startup()
+        registry_initialized = True
+
     logger.info("=" * 60)
     logger.info("🚀 Temporal Gateway Started")
     logger.info("=" * 60)
     logger.info("Connected to Temporal", host="localhost:7233")
     logger.info("Gateway API", url="http://localhost:8001")
     logger.info("Temporal UI", url="http://localhost:8233")
-    logger.info("Workflows discovered", count=summary.get('discovered', 0))
+    logger.info("Registry service mounted", path="/api/registry")
     if log_file:
         logger.info("Log file", path=str(log_file))
     logger.info("=" * 60)
@@ -117,7 +131,11 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     """Cleanup on shutdown"""
+    global registry_initialized
     await disconnect_broadcast()
+    if registry_initialized:
+        await registry_shutdown()
+        registry_initialized = False
     if temporal_client:
         await temporal_client.close()
 
@@ -141,70 +159,18 @@ class WorkflowStatusResponse(BaseModel):
 
 @app.get("/workflows")
 async def list_workflows() -> Dict[str, Any]:
-    """
-    List all available workflow templates
-
-    Returns a list of discovered workflows with their metadata.
-    Each workflow has a set of overridable parameters defined in its override file.
-
-    Returns:
-        Dictionary with list of workflows and their metadata
-    """
-    if not workflow_registry:
-        raise HTTPException(status_code=503, detail="Workflow registry not initialized")
-
-    workflows = workflow_registry.list_workflows()
-
-    return {
-        "workflows": workflows,
-        "count": len(workflows)
-    }
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy endpoint removed. Use /api/registry/v1/templates",
+    )
 
 
 @app.get("/workflows/{workflow_name}")
 async def get_workflow_details(workflow_name: str) -> Dict[str, Any]:
-    """
-    Get detailed information about a specific workflow template
-
-    Returns all overridable parameters grouped by category, output information,
-    and workflow metadata.
-
-    Args:
-        workflow_name: Name of the workflow (e.g., "video_wan2_2_14B_i2v")
-
-    Returns:
-        Detailed workflow information including parameters and output
-
-    Raises:
-        404: If workflow not found
-    """
-    if not workflow_registry:
-        raise HTTPException(status_code=503, detail="Workflow registry not initialized")
-
-    info = workflow_registry.get_workflow_info(workflow_name)
-
-    if not info:
-        available = [w["name"] for w in workflow_registry.list_workflows()]
-        raise HTTPException(
-            status_code=404,
-            detail=f"Workflow '{workflow_name}' not found. Available workflows: {available}"
-        )
-
-    # Group parameters by category
-    params_by_category = {}
-    for param in info["parameters"]:
-        category = param.get("category", "other")
-        if category not in params_by_category:
-            params_by_category[category] = []
-        params_by_category[category].append(param)
-
-    return {
-        "name": info["name"],
-        "description": info["description"],
-        "output": info["output"],
-        "parameters": params_by_category,
-        "parameter_count": len(info["parameters"])
-    }
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy endpoint removed. Use /api/registry/v1/templates/{template_name}/workflow and /overrides",
+    )
 
 
 # Standalone workflow endpoints removed - use chains instead
@@ -217,298 +183,61 @@ class ValidateWorkflowServerRequest(BaseModel):
     server_name: str = Field(..., description="Name of the server to validate against")
 
 
+class AssetRegisterUploadRequest(BaseModel):
+    _unused: Optional[str] = None
+
+
+class AssetCompleteUploadRequest(BaseModel):
+    _unused: Optional[str] = None
+
+
+class ArtifactRefRequest(BaseModel):
+    asset_ref: Dict[str, Any] | str
+
+
+class ArtifactDownloadUrlRequest(BaseModel):
+    asset_ref: Dict[str, Any] | str
+    expires_in: int = Field(default=3600, ge=60, le=86400)
+
+
 @app.post("/workflows/validate-server")
 async def validate_workflow_server(request: ValidateWorkflowServerRequest) -> Dict[str, Any]:
-    """
-    Validate if a workflow can run on a specific server.
-
-    Checks:
-    1. If server is already in workflow's validated_servers list, returns valid
-    2. Otherwise validates the workflow against server's object_info
-    3. If valid, adds server to validated_servers in override file
-
-    Args:
-        request: Workflow name and server name to validate
-
-    Returns:
-        {
-            "valid": bool,
-            "workflow_name": str,
-            "server_name": str,
-            "already_validated": bool,  # True if was in validated_servers
-            "missing_nodes": [...],     # Only if invalid
-            "invalid_inputs": [...]     # Only if invalid
-        }
-    """
-    if not workflow_registry:
-        raise HTTPException(status_code=503, detail="Workflow registry not initialized")
-    if not comfy_server_registry:
-        raise HTTPException(status_code=503, detail="ComfyUI server registry not initialized")
-
-    workflow_name = request.workflow_name
-    server_name = request.server_name
-
-    # Check if workflow exists
-    workflow_info = workflow_registry.get_workflow_info(workflow_name)
-    if not workflow_info:
-        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found")
-
-    # Check if server exists in ComfyServerRegistry
-    server_inventory = comfy_server_registry.get_server(server_name)
-    if not server_inventory:
-        available_servers = list(comfy_server_registry.get_all_servers().keys())
-        raise HTTPException(
-            status_code=404,
-            detail=f"Server '{server_name}' not found. Available: {available_servers}"
-        )
-
-    # Load override file to check validated_servers
-    templates_dir = Path(os.environ.get("TEMPLATES_DIR", "templates"))
-    override_file = templates_dir / f"{workflow_name}_overrides.json"
-
-    override_data = None
-    validated_servers = []
-
-    if override_file.exists():
-        try:
-            with open(override_file, 'r') as f:
-                override_data = json.load(f)
-            validated_servers = override_data.get("validated_servers", [])
-        except Exception:
-            pass
-
-    # Check if already validated
-    if server_name in validated_servers:
-        return {
-            "valid": True,
-            "workflow_name": workflow_name,
-            "server_name": server_name,
-            "already_validated": True
-        }
-
-    # Load workflow template and validate against server
-    workflow_file = templates_dir / f"{workflow_name}.json"
-    if not workflow_file.exists():
-        raise HTTPException(status_code=404, detail=f"Workflow template file not found")
-
-    try:
-        with open(workflow_file, 'r') as f:
-            workflow_data = json.load(f)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load workflow: {e}")
-
-    # Remove metadata keys (not part of actual workflow)
-    workflow_prompt = {k: v for k, v in workflow_data.items() if not k.startswith('_')}
-
-    # Validate against server
-    result = comfy_server_registry.validate_prompt(workflow_prompt, server_name)
-
-    if result["valid"]:
-        # Add to validated_servers and update override file
-        if override_data is not None:
-            validated_servers.append(server_name)
-            override_data["validated_servers"] = validated_servers
-            try:
-                with open(override_file, 'w') as f:
-                    json.dump(override_data, f, indent=2, ensure_ascii=False)
-            except Exception:
-                pass  # Non-critical if we can't update
-
-        return {
-            "valid": True,
-            "workflow_name": workflow_name,
-            "server_name": server_name,
-            "already_validated": False
-        }
-    else:
-        return {
-            "valid": False,
-            "workflow_name": workflow_name,
-            "server_name": server_name,
-            "already_validated": False,
-            "missing_nodes": result.get("missing_nodes", []),
-            "invalid_inputs": result.get("invalid_inputs", [])
-        }
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy endpoint removed. Use /api/registry/v1/workflows/validate-server",
+    )
 
 
 @app.get("/servers")
 async def list_servers() -> Dict[str, Any]:
-    """
-    List all available ComfyUI servers with their status.
-
-    Returns:
-        List of servers with name, URL, status, and node count
-    """
-    if not comfy_server_registry:
-        raise HTTPException(status_code=503, detail="ComfyUI server registry not initialized")
-
-    servers = []
-    for name, inventory in comfy_server_registry.get_all_servers().items():
-        servers.append({
-            "name": name,
-            "url": inventory.server_url,
-            "node_count": len(inventory.available_nodes),
-            "template_count": len(inventory.templates),
-            "last_sync": inventory.last_sync.isoformat() if inventory.last_sync else None,
-            "sync_error": inventory.sync_error
-        })
-
-    return {
-        "servers": servers,
-        "count": len(servers)
-    }
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy endpoint removed. Use /api/registry/v1/servers",
+    )
 
 
 @app.get("/workflows/{workflow_name}/validated-servers")
 async def get_workflow_validated_servers(workflow_name: str) -> Dict[str, Any]:
-    """
-    Get list of servers validated to run a specific workflow.
-
-    Args:
-        workflow_name: Name of the workflow
-
-    Returns:
-        List of validated server names
-    """
-    if not workflow_registry:
-        raise HTTPException(status_code=503, detail="Workflow registry not initialized")
-
-    # Check if workflow exists
-    workflow_info = workflow_registry.get_workflow_info(workflow_name)
-    if not workflow_info:
-        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found")
-
-    # Load override file
-    templates_dir = Path(os.environ.get("TEMPLATES_DIR", "templates"))
-    override_file = templates_dir / f"{workflow_name}_overrides.json"
-
-    validated_servers = []
-
-    if override_file.exists():
-        try:
-            with open(override_file, 'r') as f:
-                override_data = json.load(f)
-            validated_servers = override_data.get("validated_servers", [])
-        except Exception:
-            pass
-
-    return {
-        "workflow_name": workflow_name,
-        "validated_servers": validated_servers,
-        "count": len(validated_servers)
-    }
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy endpoint removed. Use /api/registry/v1/templates/{template_name}/overrides",
+    )
 
 
 @app.get("/servers/{server_name}/combo-options/{class_type}/{input_name}")
 async def get_combo_options(server_name: str, class_type: str, input_name: str) -> Dict[str, Any]:
-    """
-    Get available options for a combo input (dropdown) from a server.
-
-    This is useful for getting available checkpoints, LoRAs, VAEs, etc.
-
-    Args:
-        server_name: Name of the ComfyUI server
-        class_type: Node class type (e.g., "CheckpointLoaderSimple")
-        input_name: Input name (e.g., "ckpt_name")
-
-    Returns:
-        List of available options for the combo input
-    """
-    if not comfy_server_registry:
-        raise HTTPException(status_code=503, detail="ComfyUI server registry not initialized")
-
-    server_inventory = comfy_server_registry.get_server(server_name)
-    if not server_inventory:
-        available_servers = list(comfy_server_registry.get_all_servers().keys())
-        raise HTTPException(
-            status_code=404,
-            detail=f"Server '{server_name}' not found. Available: {available_servers}"
-        )
-
-    options = server_inventory.get_combo_options(class_type, input_name)
-
-    if options is None:
-        return {
-            "server_name": server_name,
-            "class_type": class_type,
-            "input_name": input_name,
-            "options": [],
-            "is_combo": False
-        }
-
-    return {
-        "server_name": server_name,
-        "class_type": class_type,
-        "input_name": input_name,
-        "options": options,
-        "is_combo": True,
-        "count": len(options)
-    }
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy endpoint removed. Use /api/registry/v1/workflows/{workflow_name}/parameter-options/{server_name}",
+    )
 
 
 @app.get("/workflows/{workflow_name}/parameter-options/{server_name}")
 async def get_workflow_parameter_options(workflow_name: str, server_name: str) -> Dict[str, Any]:
-    """
-    Get available combo options for overridable parameters in a workflow.
-
-    Only returns options for parameters defined in the override file,
-    not all inputs in the workflow.
-
-    Args:
-        workflow_name: Name of the workflow
-        server_name: Name of the ComfyUI server
-
-    Returns:
-        Dictionary mapping parameter keys to their available options
-    """
-    if not comfy_server_registry:
-        raise HTTPException(status_code=503, detail="ComfyUI server registry not initialized")
-
-    # Check server exists
-    server_inventory = comfy_server_registry.get_server(server_name)
-    if not server_inventory:
-        available_servers = list(comfy_server_registry.get_all_servers().keys())
-        raise HTTPException(
-            status_code=404,
-            detail=f"Server '{server_name}' not found. Available: {available_servers}"
-        )
-
-    # Load override file to get overridable parameters
-    templates_dir = Path(os.environ.get("TEMPLATES_DIR", "templates"))
-    override_file = templates_dir / f"{workflow_name}_overrides.json"
-
-    if not override_file.exists():
-        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found")
-
-    try:
-        with open(override_file, 'r') as f:
-            override_data = json.load(f)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load override file: {e}")
-
-    parameters = override_data.get("parameters", [])
-
-    # Get combo options for each parameter
-    parameter_options = {}
-
-    for param in parameters:
-        class_type = param.get("node_class")
-        input_name = param.get("input_key")
-        param_key = param.get("key")  # e.g., "30.ckpt_name"
-
-        if not class_type or not input_name:
-            continue
-
-        options = server_inventory.get_combo_options(class_type, input_name)
-        if options:
-            parameter_options[param_key] = options
-
-    return {
-        "workflow_name": workflow_name,
-        "server_name": server_name,
-        "parameter_options": parameter_options,
-        "count": len(parameter_options)
-    }
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy endpoint removed. Use /api/registry/v1/workflows/{workflow_name}/parameter-options/{server_name}",
+    )
 
 
 @app.get("/workflow/status/{workflow_id}")
@@ -580,33 +309,191 @@ async def cancel_workflow(workflow_id: str) -> Dict[str, str]:
 
 @app.get("/artifacts/{artifact_id}")
 async def serve_artifact(artifact_id: str):
-    """Serve an artifact (image/video) by ID"""
-    from core.database import get_session
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy endpoint removed. Use /artifact-service/artifacts/{artifact_id}/download",
+    )
+
+
+@app.get("/artifact-service/artifacts/{artifact_id}/download")
+async def artifact_service_download_artifact(artifact_id: str):
     from core.database.crud.artifact import get_artifact
 
     with get_session() as session:
         artifact = get_artifact(session, artifact_id)
-
         if not artifact:
             raise HTTPException(status_code=404, detail="Artifact not found")
 
-        artifact_path = Path(artifact.local_path)
+        metadata = artifact.extra_metadata if isinstance(artifact.extra_metadata, dict) else None
+        asset_ref = metadata.get("asset_ref") if isinstance(metadata, dict) else None
+        if not isinstance(asset_ref, dict):
+            raise HTTPException(status_code=404, detail="Artifact has no asset_ref metadata")
 
-        if not artifact_path.exists():
-            raise HTTPException(status_code=404, detail="Artifact file not found on disk")
+    try:
+        download_url = artifact_service.get_download_url(asset_ref=asset_ref, expires_in=3600)
+        return RedirectResponse(url=download_url, status_code=307)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Artifact redirect failed: {error}") from error
 
-        # Determine media type based on file type
-        media_type_map = {
-            "image": f"image/{artifact.file_format or 'png'}",
-            "video": f"video/{artifact.file_format or 'mp4'}",
-        }
-        media_type = media_type_map.get(artifact.file_type, "application/octet-stream")
 
-        return StreamingResponse(
-            iter([artifact_path.read_bytes()]),
-            media_type=media_type,
-            headers={"Content-Disposition": f"inline; filename={artifact.filename}"}
+@app.post("/artifact-service/create")
+async def artifact_service_create(
+    provider: str = Form(...),
+    kind: str = Form("file"),
+    metadata_json: str = Form(""),
+    file: UploadFile = File(...),
+):
+    try:
+        payload = await file.read()
+        if not payload:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+        metadata: Dict[str, Any] | None = None
+        if metadata_json.strip():
+            parsed = json.loads(metadata_json)
+            if not isinstance(parsed, dict):
+                raise HTTPException(status_code=400, detail="metadata_json must be a JSON object")
+            metadata = parsed
+
+        asset_ref = artifact_service.create(
+            provider=provider.strip().lower(),
+            payload=payload,
+            filename=file.filename or "upload.bin",
+            kind=kind.strip() or "file",
+            mime_type=file.content_type,
+            metadata=metadata,
         )
+        return {"asset_ref": asset_ref}
+    except HTTPException:
+        raise
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Artifact create failed: {error}") from error
+
+
+@app.post("/artifact-service/read")
+async def artifact_service_read(request: ArtifactRefRequest):
+    try:
+        asset_ref = artifact_service.read(asset_ref=request.asset_ref)
+        return {"asset_ref": asset_ref}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Artifact read failed: {error}") from error
+
+
+@app.post("/artifact-service/download-url")
+async def artifact_service_download_url(request: ArtifactDownloadUrlRequest):
+    try:
+        url = artifact_service.get_download_url(
+            asset_ref=request.asset_ref,
+            expires_in=request.expires_in,
+        )
+        return {"download_url": url}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Artifact download URL failed: {error}") from error
+
+
+@app.post("/artifact-service/update")
+async def artifact_service_update(
+    asset_ref_json: str = Form(...),
+    metadata_json: str = Form(""),
+    filename: str = Form(""),
+    mime_type: str = Form(""),
+    file: UploadFile = File(...),
+):
+    try:
+        parsed_asset_ref = json.loads(asset_ref_json)
+        if not isinstance(parsed_asset_ref, dict):
+            raise HTTPException(status_code=400, detail="asset_ref_json must be a JSON object")
+        payload = await file.read()
+        if not payload:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+        metadata: Dict[str, Any] | None = None
+        if metadata_json.strip():
+            parsed_metadata = json.loads(metadata_json)
+            if not isinstance(parsed_metadata, dict):
+                raise HTTPException(status_code=400, detail="metadata_json must be a JSON object")
+            metadata = parsed_metadata
+
+        updated = artifact_service.update(
+            asset_ref=parsed_asset_ref,
+            payload=payload,
+            filename=filename.strip() or None,
+            mime_type=mime_type.strip() or file.content_type or None,
+            metadata=metadata,
+        )
+        return {"asset_ref": updated}
+    except HTTPException:
+        raise
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Artifact update failed: {error}") from error
+
+
+@app.post("/artifact-service/delete")
+async def artifact_service_delete(request: ArtifactRefRequest):
+    try:
+        artifact_service.delete(asset_ref=request.asset_ref)
+        return {"ok": True}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Artifact delete failed: {error}") from error
+
+
+@app.post("/assets/register-upload")
+async def register_asset_upload(request: AssetRegisterUploadRequest):
+    raise HTTPException(
+        status_code=410,
+        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
+    )
+
+
+@app.post("/assets/{asset_id}:upload")
+async def upload_asset_bytes(asset_id: str):
+    raise HTTPException(
+        status_code=410,
+        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
+    )
+
+
+@app.post("/assets/{asset_id}:complete-upload")
+async def complete_asset_upload(asset_id: str, request: AssetCompleteUploadRequest):
+    raise HTTPException(
+        status_code=410,
+        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
+    )
+
+
+@app.get("/assets/{asset_id}/meta")
+async def get_asset_meta(asset_id: str):
+    raise HTTPException(
+        status_code=410,
+        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
+    )
+
+
+@app.get("/assets/{asset_id}/resolve")
+async def resolve_asset(asset_id: str):
+    raise HTTPException(
+        status_code=410,
+        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
+    )
+
+
+@app.get("/assets/{asset_id}/download")
+async def download_asset(asset_id: str):
+    raise HTTPException(
+        status_code=410,
+        detail="Asset upload endpoints are removed. Use provider-native artifact storage flow.",
+    )
 
 
 @app.get("/health")
@@ -621,55 +508,10 @@ async def health_check():
 
 @app.get("/node-definitions")
 async def get_node_definitions():
-    """
-    Get all workflow definitions for the frontend node editor.
-    Returns UI metadata + overridable parameters for each workflow.
-    """
-    from dataclasses import asdict
-
-    workflows = []
-    for name, info in workflow_registry.workflows.items():
-        # Skip workflows without UI metadata
-        if not info.ui_metadata:
-            continue
-
-        ui = info.ui_metadata
-
-        # Derive inputSockets from parameters with input_key containing "image" or "video"
-        input_sockets = []
-        for p in info.parameters:
-            if "image" in p.input_key.lower() or "video" in p.input_key.lower():
-                # Determine socket type from input_key
-                socket_type = "video" if "video" in p.input_key.lower() else "image"
-                input_sockets.append({
-                    "id": p.key,  # Use full key (e.g. "78.image") for uniqueness
-                    "type": socket_type,
-                    "label": p.node_title,  # Use node title as label
-                })
-
-        workflows.append({
-            "workflow_name": name,
-            "nodeType": ui.nodeType,
-            "label": ui.label,
-            "icon": ui.icon,
-            "color": ui.color,
-            "category": ui.category,
-            "inputSockets": input_sockets,
-            "outputSockets": [asdict(s) for s in ui.outputSockets],
-            "parameters": [
-                {
-                    "key": p.key,
-                    "input_key": p.input_key,
-                    "default_value": p.default_value,
-                    "type": p.type,
-                    "description": p.description,
-                    "category": p.category,
-                }
-                for p in info.parameters
-            ],
-        })
-
-    return workflows
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy endpoint removed. Use /api/registry/v1/node-definitions",
+    )
 
 
 # ============================================================================
@@ -777,6 +619,7 @@ async def get_chain_versions(chain_name: str):
                 {
                     "id": c.id,
                     "version": c.version,
+                    "definition_hash": c.definition_hash,
                     "status": c.status,
                     "job_id": c.job_id,
                     "started_at": c.started_at.isoformat() if c.started_at else None,
@@ -816,6 +659,10 @@ async def get_chain_artifacts(chain_id: str):
             artifacts = session.query(Artifact).filter(
                 Artifact.workflow_id == wf.id
             ).all()
+            if not artifacts and wf.latest_artifact_id:
+                latest = session.query(Artifact).filter(Artifact.id == wf.latest_artifact_id).first()
+                if latest:
+                    artifacts = [latest]
 
             steps.append({
                 "step_id": wf.step_id,
@@ -830,7 +677,7 @@ async def get_chain_artifacts(chain_id: str):
                         "file_format": a.file_format,
                         "file_size": a.file_size,
                         "created_at": a.created_at.isoformat() if a.created_at else None,
-                        "url": f"/artifacts/{a.id}",
+                        "url": f"/artifact-service/artifacts/{a.id}/download",
                     }
                     for a in artifacts
                 ]
@@ -871,6 +718,7 @@ async def get_chain_definition(chain_id: str):
             "chain_id": chain_id,
             "chain_name": chain.name,
             "version": chain.version,
+            "definition_hash": chain.definition_hash,
             "definition": chain.chain_definition,
             "executed_definition": chain.executed_definition,
         }
@@ -1371,6 +1219,77 @@ async def cancel_chain(chain_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to cancel chain: {str(e)}")
+
+
+@app.post("/chains/abort-all")
+async def abort_all_chains():
+    """
+    Cancel all active chain executions (queued/running) and mark them cancelled.
+
+    Returns:
+        Summary of cancelled chains and any per-chain failures.
+    """
+    from core.database.models import Chain
+    from core.database.crud.chain import update_chain_status
+
+    terminal_statuses = {"completed", "failed", "cancelled"}
+
+    with get_session() as session:
+        active_chains = (
+            session.query(Chain)
+            .filter(~Chain.status.in_(terminal_statuses))
+            .all()
+        )
+
+        targets = [
+            {
+                "chain_id": chain.id,
+                "job_id": chain.job_id,
+                "status": chain.status,
+            }
+            for chain in active_chains
+        ]
+
+    results: list[dict[str, Any]] = []
+    cancelled_count = 0
+
+    for target in targets:
+        chain_id = target["chain_id"]
+        job_id = target["job_id"]
+        try:
+            if job_id:
+                abort_mode = await chain_engine.abort_chain(job_id, grace_seconds=5.0)
+            else:
+                abort_mode = "no_job"
+
+            with get_session() as session:
+                update_chain_status(session, chain_id, "cancelled")
+
+            results.append(
+                {
+                    "chain_id": chain_id,
+                    "job_id": job_id,
+                    "status": "cancelled",
+                    "mode": abort_mode,
+                }
+            )
+            cancelled_count += 1
+        except Exception as e:
+            results.append(
+                {
+                    "chain_id": chain_id,
+                    "job_id": job_id,
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+
+    return {
+        "ok": True,
+        "requested_count": len(targets),
+        "cancelled_count": cancelled_count,
+        "results": results,
+    }
 
 
 @app.post("/chains/{chain_id}/skip-level-wait")

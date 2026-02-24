@@ -4,7 +4,7 @@ Database module for ComfyAutomate Temporal Gateway
 Provides SQLAlchemy models and CRUD operations for artifact tracking.
 """
 
-from .models import Chain, Workflow, Artifact, ArtifactTransfer, Base
+from .models import Chain, Workflow, Artifact, ArtifactTransfer, ApprovalRequest, StepCache, Base
 from .session import get_session, get_session_direct, init_db, engine
 from .crud import (
     # Chain
@@ -50,6 +50,8 @@ __all__ = [
     "Workflow",
     "Artifact",
     "ArtifactTransfer",
+    "ApprovalRequest",
+    "StepCache",
     "Base",
     # Session
     "get_session",

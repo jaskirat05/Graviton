@@ -1,0 +1,16 @@
+{
+  "workflow_hash": "sha256:b5e5389cd8f01f1d974d740391f94cb55f2eb4788489c514fb06fd1b509ff3a0",
+  "generated_at": "2026-02-20T06:36:44.933110+00:00",
+  "workflow_name": "LTX-2_V2V_Detailer",
+  "description": "Auto-generated parameter overrides. Remove parameters to make them immutable.",
+  "parameters": [],
+  "validated_servers": [],
+  "ui_metadata": {
+    "nodeType": "utility_workflow",
+    "label": "LTX-2_V2V_Detailer",
+    "icon": "workflow",
+    "color": "#666666",
+    "category": "utility",
+    "outputSockets": []
+  }
+}
