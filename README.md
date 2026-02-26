@@ -149,6 +149,7 @@ This enables iterative refinement without restarting the entire chain.
 
 ## License
 
-Free for non-commercial/public use under the license in [LICENSE](LICENSE).
+Licensed under **PolyForm Noncommercial 1.0.0** for non-commercial/public use.
+See [LICENSE](LICENSE).
 
 Commercial use requires a separate license. See [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md).
