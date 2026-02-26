@@ -92,15 +92,15 @@ docker push ghcr.io/<org>/graviton-frontend:v0.1.0
 
 ## Workflow Requirements
 
-For best compatibility, your ComfyUI workflows should follow these guidelines:
+All workflows must follow these rules:
 
 ### Outputs
-- **Single output per workflow** - Each workflow should have one primary output
-- **Use default save nodes** - Use ComfyUI's built-in `SaveImage` or `SaveVideo` nodes
+- **Use Graviton save nodes only** - Do not use default ComfyUI save nodes
+- **Exactly one save node per workflow** - Each workflow must end with a single Graviton save node
 
 ### Inputs
-- **Recommended** - Use ComfyUI's default `LoadImage` and `LoadVideo` nodes
-- **Supported** - Custom nodes for image/video input work but are not recommended
+- **Use Graviton load nodes** - Inputs must be provided through Graviton load nodes
+- **Multiple load nodes are supported** - You can use multiple Graviton load nodes in the same workflow
 
 ## Customizing Editable Parameters
 
@@ -149,4 +149,6 @@ This enables iterative refinement without restarting the entire chain.
 
 ## License
 
-MIT
+Free for non-commercial/public use under the license in [LICENSE](LICENSE).
+
+Commercial use requires a separate license. See [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md).
