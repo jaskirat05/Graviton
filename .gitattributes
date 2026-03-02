@@ -1,0 +1,5 @@
+# Use LF line endings for all text files across platforms
+* text=auto eol=lf
+
+# Keep explicit shell-script rule for clarity
+*.sh text eol=lf

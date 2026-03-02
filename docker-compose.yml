@@ -7,6 +7,7 @@ x-backend-image: &backend-image
 x-backend-env: &backend-env
   TEMPORAL_ADDRESS: temporal:7233
   REDIS_URL: redis://redis:6379
+  REGISTRY_NATS_URL: nats://nats:4222
   REGISTRY_TEMPLATE_ROOT_DIR: /app/registry_templates
   DATABASE_URL: postgresql://temporal:temporal@graviton-postgresql:5432/temporal
   HOST_UID: ${HOST_UID:-}

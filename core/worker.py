@@ -65,6 +65,7 @@ from core.activities import (
     create_approval_request_activity,
     upload_local_inputs,
     save_executed_definition_activity,
+    push_control_plane_config_to_worker_activity,
 )
 from core.database import init_db
 from core.services.broadcast import connect_broadcast, disconnect_broadcast
@@ -124,6 +125,7 @@ async def main():
             create_approval_request_activity,
             upload_local_inputs,
             save_executed_definition_activity,
+            push_control_plane_config_to_worker_activity,
         ]
     )
 
